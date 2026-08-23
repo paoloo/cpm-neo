@@ -1,6 +1,6 @@
 /*
  * kernel/disk.h
- * FreeCP/M — block/extent volume-map disk abstraction layer
+ * FreeCP/M — block/run volume-map disk abstraction layer
  *
  * Disk layout:
  *   Sector 0 : boot sector (geometry + kernel/CCP pointers)
@@ -10,10 +10,10 @@
  *
  * A block is a fixed run of 2 sectors (1 KB) at
  * `block_base + i*2`.  Each volume owns an ordered list of up to
- * VOL_MAX_EXT extents (contiguous block runs); its logical space is the
- * concatenation of those extents.  A volume with ext_count==0 is unmounted.
+ * VOL_MAX_RUNS runs (contiguous block runs); its logical space is the
+ * concatenation of those runs.  A volume with ext_count==0 is unmounted.
  *
- * All byte-level layout constants (VMAP_*, VolRec, Ext, caps) live in
+ * All byte-level layout constants (VMAP_*, VolRec, BlockRun, caps) live in
  * kernel_abi.h so the sysgen tool shares the same on-disk format.
  */
 
@@ -34,7 +34,7 @@ uint16_t disk_free_blocks(void);                 /* unallocated blocks in the gr
 int      disk_vread(int8_t vol_id, uint32_t lba, uint8_t *buf);
 int      disk_vwrite(int8_t vol_id, uint32_t lba, const uint8_t *buf);
 
-/* Volume lifecycle: mount allocates default extents, unmount frees all.
+/* Volume lifecycle: mount allocates default runs, unmount frees all.
  * Returns EOK or error. */
 int      disk_vmount(int8_t vol_id);             /* mount at default blocks */
 int      disk_vunmount(int8_t vol_id);           /* free all blocks         */
@@ -43,7 +43,7 @@ int      disk_vshrink(int8_t vol_id, uint16_t n);/* shrink by n blocks      */
 
 /* Query helpers: returns 0 if the volume is unmounted. */
 uint32_t disk_vsectors(int8_t vol_id);           /* capacity in sectors (0 if unmounted) */
-uint8_t  disk_vextents(int8_t vol_id);           /* active extent count (0 = unmounted)  */
+uint8_t  disk_vruns(int8_t vol_id);              /* active runs count (0 = unmounted)  */
 int      disk_vgetattr(int8_t vol_id, uint8_t *attr);
 int      disk_vsetattr(int8_t vol_id, uint8_t attr);
 

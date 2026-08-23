@@ -476,7 +476,7 @@ int save_disk(const char *path)
 
 int mount_vol(int8_t vol)
 {
-    if (disk_vextents(vol) == 0)
+    if (disk_vruns(vol) == 0)
     {
         if (bd_mount(vol) != EOK)
         {

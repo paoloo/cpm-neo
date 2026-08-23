@@ -82,7 +82,7 @@ typedef struct
 #define VOL_ATTR_RW 0
 #define VOL_ATTR_RO 1
 
-#define KERN_START_LBA 2 /* kernel image LBA (VMAP now occupies LBA 1) */
+#define KERN_START_LBA 2 /* kernel image LBA */
 
 typedef struct
 {
@@ -179,9 +179,9 @@ typedef struct
  * A volume's logical space is the concatenation of its ordered extents
  * (block runs). ext_count == 0 means the volume is unmounted. */
 
-#define VMAP_LBA        1 /* volume-map sector LBA            */
-#define VMAP_MAGIC      0x4350u /* 'CP' identity              */
-#define VOL_MAX_EXT     4 /* max extents per volume           */
+#define VMAP_LBA         1 /* volume-map sector LBA            */
+#define VMAP_MAGIC       0x4350u /* 'CP' identity              */
+#define VOL_MAX_RUNS     4 /* max runs per volume           */
 #define VMAP_VOLREC_SIZE 18 /* VolRec bytes                  */
 
 #define VMAP_NUM_BLOCKS 0x000 /* u16 — total 1K blocks on disk */

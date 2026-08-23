@@ -1350,7 +1350,7 @@ int cmd_stat(int argc, char **argv)
 
     for (int v = 0; v < VOL_MAX; v++)
     {
-        if (disk_vextents((int8_t)v) == 0)
+        if (disk_vruns((int8_t)v) == 0)
         {
             printf("  %c: unmounted\n", 'A' + v);
             continue;

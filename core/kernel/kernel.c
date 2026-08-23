@@ -554,7 +554,7 @@ int sys_info(SysInfo *out)
     out->tpa = ((uint32_t)__kernel_base - TPA_LOAD_ADDR) / 1024;
 
     for (int v = 0; v < VOL_MAX; v++)
-        out->vol_mounted[v] = (disk_vextents((int8_t)v) > 0) ? 1 : 0;
+        out->vol_mounted[v] = (disk_vruns((int8_t)v) > 0) ? 1 : 0;
 
     out->disk_size_kb = disk_blocks();
     out->disk_unalloc_kb = disk_free_blocks();

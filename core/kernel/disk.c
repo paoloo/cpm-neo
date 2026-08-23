@@ -1,9 +1,9 @@
 /*
- * kernel/disk.c — block/extent volume-map disk layer
+ * kernel/disk.c — block/run volume-map disk layer
  *
  * Manages on-disk volume records (VolRec[4]) and the block grid geometry.
  * No free bitmap is kept: free runs are computed on demand from the
- * (at most VOL_MAX * VOL_MAX_EXT = 16) volume extents.
+ * (at most VOL_MAX * VOL_MAX_RUN = 16) volume runs.
  */
 
 #include "bios.h"
@@ -18,12 +18,12 @@ typedef struct
 {
     uint16_t start; /* first block index */
     uint16_t count; /* number of blocks  */
-} Ext;              /* 4 bytes */
+} BlockRun;              /* 4 bytes */
 
 typedef struct
 {
-    Ext ext[VOL_MAX_EXT]; /* ordered; ext[0] = head */
-    uint8_t ext_count;    /* 0 = unmounted              */
+    BlockRun run[VOL_MAX_RUNS]; /* ordered; run[0] = head */
+    uint8_t run_count;    /* 0 = unmounted              */
     uint8_t attr;         /* VOL_ATTR_RW / VOL_ATTR_RO  */
 } VolRec;                 /* 18 bytes               */
 
@@ -32,7 +32,7 @@ typedef struct
     VolRec volumes[VOL_MAX];
     uint16_t num_blocks;
     uint16_t block_base;
-    int initialized;
+    uint8_t initialized;
 } DiskState;
 
 static DiskState g_disk;
@@ -48,14 +48,14 @@ static uint16_t min_viable_blocks(void)
 static uint16_t vol_blocks(const VolRec *vr)
 {
     uint16_t blocks = 0;
-    for (uint8_t i = 0; i < vr->ext_count; i++)
-        blocks += vr->ext[i].count;
+    for (uint8_t i = 0; i < vr->run_count; i++)
+        blocks += vr->run[i].count;
     return blocks;
 }
 
 /* Gather every used block run [start, end) across all volumes into an
  * array sorted by start.  Returns the number of runs, or -1 on a layout
- * error (extent count/range violation).  Runs are NOT merged here; overlap
+ * error (run count/range violation).  Runs are NOT merged here; overlap
  * is treated as an error by the caller. */
 static int collect_used_runs(uint16_t *rstart, uint16_t *rend, int cap)
 {
@@ -64,22 +64,22 @@ static int collect_used_runs(uint16_t *rstart, uint16_t *rend, int cap)
     for (int v = 0; v < VOL_MAX; v++)
     {
         const VolRec *vr = &g_disk.volumes[v];
-        if (vr->ext_count > VOL_MAX_EXT)
+        if (vr->run_count > VOL_MAX_RUNS)
             return -1;
 
-        for (int i = 0; i < vr->ext_count; i++)
+        for (int i = 0; i < vr->run_count; i++)
         {
-            if (vr->ext[i].count == 0)
+            if (vr->run[i].count == 0)
                 return -1;
 
-            uint32_t end = (uint32_t)vr->ext[i].start + vr->ext[i].count;
+            uint32_t end = (uint32_t)vr->run[i].start + vr->run[i].count;
             if (end > g_disk.num_blocks)
                 return -1;
 
             if (n >= cap)
                 return -1;
 
-            rstart[n] = vr->ext[i].start;
+            rstart[n] = vr->run[i].start;
             rend[n] = (uint16_t)end;
             n++;
         }
@@ -105,13 +105,13 @@ static int collect_used_runs(uint16_t *rstart, uint16_t *rend, int cap)
     return n;
 }
 
-/* Validate that extents are in range, non-empty, and non-overlapping.
+/* Validate that runs are in range, non-empty, and non-overlapping.
  * Returns 0 on success, -1 on a layout error. */
 static int validate_layout(void)
 {
-    uint16_t s[VOL_MAX * VOL_MAX_EXT];
-    uint16_t e[VOL_MAX * VOL_MAX_EXT];
-    int n = collect_used_runs(s, e, VOL_MAX * VOL_MAX_EXT);
+    uint16_t s[VOL_MAX * VOL_MAX_RUNS];
+    uint16_t e[VOL_MAX * VOL_MAX_RUNS];
+    int n = collect_used_runs(s, e, VOL_MAX * VOL_MAX_RUNS);
     if (n < 0)
         return -1;
 
@@ -127,9 +127,9 @@ static int validate_layout(void)
 /* Find n contiguous free blocks; returns 0 and sets *start, or -1. */
 static int find_free_run(uint16_t n, uint16_t *start)
 {
-    uint16_t s[VOL_MAX * VOL_MAX_EXT];
-    uint16_t e[VOL_MAX * VOL_MAX_EXT];
-    int nruns = collect_used_runs(s, e, VOL_MAX * VOL_MAX_EXT);
+    uint16_t s[VOL_MAX * VOL_MAX_RUNS];
+    uint16_t e[VOL_MAX * VOL_MAX_RUNS];
+    int nruns = collect_used_runs(s, e, VOL_MAX * VOL_MAX_RUNS);
     if (nruns < 0)
         return -1;
 
@@ -157,9 +157,9 @@ static int find_free_run(uint16_t n, uint16_t *start)
 /* Total free blocks in the grid: the gaps between the used runs. */
 uint16_t disk_free_blocks(void)
 {
-    uint16_t s[VOL_MAX * VOL_MAX_EXT];
-    uint16_t e[VOL_MAX * VOL_MAX_EXT];
-    int nruns = collect_used_runs(s, e, VOL_MAX * VOL_MAX_EXT);
+    uint16_t s[VOL_MAX * VOL_MAX_RUNS];
+    uint16_t e[VOL_MAX * VOL_MAX_RUNS];
+    int nruns = collect_used_runs(s, e, VOL_MAX * VOL_MAX_RUNS);
     if (nruns < 0)
         return 0;
 
@@ -180,9 +180,9 @@ uint16_t disk_free_blocks(void)
 /* Test whether the block range [start, start+n) is entirely free. */
 static int range_is_free(uint16_t start, uint16_t n)
 {
-    uint16_t s[VOL_MAX * VOL_MAX_EXT];
-    uint16_t e[VOL_MAX * VOL_MAX_EXT];
-    int nruns = collect_used_runs(s, e, VOL_MAX * VOL_MAX_EXT);
+    uint16_t s[VOL_MAX * VOL_MAX_RUNS];
+    uint16_t e[VOL_MAX * VOL_MAX_RUNS];
+    int nruns = collect_used_runs(s, e, VOL_MAX * VOL_MAX_RUNS);
     if (nruns < 0)
         return 0;
 
@@ -206,17 +206,17 @@ static int vol_translate(int8_t vol_id, uint32_t lba, uint32_t *phys)
         return -1;
 
     VolRec *vr = &g_disk.volumes[vol_id];
-    if (vr->ext_count == 0)
+    if (vr->run_count == 0)
         return -1;
 
     uint32_t sofar = 0;
-    for (uint8_t i = 0; i < vr->ext_count; i++)
+    for (uint8_t i = 0; i < vr->run_count; i++)
     {
-        uint32_t seg = (uint32_t)vr->ext[i].count * BD_BLOCK_SECS;
+        uint32_t seg = (uint32_t)vr->run[i].count * BD_BLOCK_SECS;
         if (lba < sofar + seg)
         {
             *phys = (uint32_t)g_disk.block_base +
-                    (uint32_t)vr->ext[i].start * BD_BLOCK_SECS + (lba - sofar);
+                    (uint32_t)vr->run[i].start * BD_BLOCK_SECS + (lba - sofar);
             return 0;
         }
         sofar += seg;
@@ -301,7 +301,7 @@ int disk_vmount(int8_t vol_id)
         return EIO;
 
     VolRec *vr = &g_disk.volumes[vol_id];
-    if (vr->ext_count != 0)
+    if (vr->run_count != 0)
         return EINVAL;
 
     uint16_t n = DISK_DEFAULT_MOUNT_BLOCKS;
@@ -318,9 +318,9 @@ int disk_vmount(int8_t vol_id)
     if ((n * BD_BLOCK_SECS - BD_DATA_START) / BD_BLOCK_SECS <= BD_RESERVED_BLOCKS)
         return ENOSPC;
 
-    vr->ext_count = 1;
-    vr->ext[0].start = start;
-    vr->ext[0].count = n;
+    vr->run_count = 1;
+    vr->run[0].start = start;
+    vr->run[0].count = n;
     vr->attr = VOL_ATTR_RW;
 
     return vmap_persist();
@@ -335,7 +335,7 @@ int disk_vextend(int8_t vol_id, uint16_t n)
         return EIO;
 
     VolRec *vr = &g_disk.volumes[vol_id];
-    if (vr->ext_count == 0)
+    if (vr->run_count == 0)
         return EINVAL;
 
     if (n == 0)
@@ -351,7 +351,7 @@ int disk_vextend(int8_t vol_id, uint16_t n)
 
     /* Prefer to extend the last extent's tail when the blocks right after it
      * are free and contiguous. */
-    Ext *last = &vr->ext[vr->ext_count - 1];
+    BlockRun *last = &vr->run[vr->run_count - 1];
     uint16_t tail = (uint16_t)(last->start + last->count);
 
     if (tail + n <= g_disk.num_blocks && range_is_free(tail, n))
@@ -368,7 +368,7 @@ int disk_vextend(int8_t vol_id, uint16_t n)
     }
 
     /* Otherwise gather a fresh contiguous run in a new extent. */
-    if (vr->ext_count >= VOL_MAX_EXT)
+    if (vr->run_count >= VOL_MAX_RUNS)
         return ENOSPC;
 
     uint16_t start;
@@ -376,9 +376,9 @@ int disk_vextend(int8_t vol_id, uint16_t n)
         return ENOSPC;
 
     VolRec save = *vr;
-    vr->ext[vr->ext_count].start = start;
-    vr->ext[vr->ext_count].count = n;
-    vr->ext_count++;
+    vr->run[vr->run_count].start = start;
+    vr->run[vr->run_count].count = n;
+    vr->run_count++;
 
     if (vmap_persist() != EOK)
     {
@@ -397,7 +397,7 @@ int disk_vshrink(int8_t vol_id, uint16_t n)
         return EIO;
 
     VolRec *vr = &g_disk.volumes[vol_id];
-    if (vr->ext_count == 0)
+    if (vr->run_count == 0)
         return EINVAL;
 
     if (n == 0)
@@ -413,16 +413,16 @@ int disk_vshrink(int8_t vol_id, uint16_t n)
     if (cur - n < min_viable_blocks())
         return EINVAL;
 
-    /* Trim n blocks from the tail, walking extents backwards. */
+    /* Trim n blocks from the tail, walking runs backwards. */
     VolRec save = *vr;
     uint16_t todo = n;
-    while (todo > 0 && vr->ext_count > 0)
+    while (todo > 0 && vr->run_count > 0)
     {
-        Ext *last = &vr->ext[vr->ext_count - 1];
+        BlockRun *last = &vr->run[vr->run_count - 1];
         if (last->count <= todo)
         {
             todo = todo - last->count;
-            vr->ext_count--;
+            vr->run_count--;
         }
         else
         {
@@ -455,11 +455,11 @@ int disk_vunmount(int8_t vol_id)
         return EIO;
 
     VolRec *vr = &g_disk.volumes[vol_id];
-    if (vr->ext_count == 0)
+    if (vr->run_count == 0)
         return EINVAL;
 
     VolRec save = *vr;
-    vr->ext_count = 0;
+    vr->run_count = 0;
 
     if (vmap_persist() != EOK)
     {
@@ -478,12 +478,12 @@ uint32_t disk_vsectors(int8_t vol_id)
     return (uint32_t)vol_blocks(&g_disk.volumes[vol_id]) * BD_BLOCK_SECS;
 }
 
-uint8_t disk_vextents(int8_t vol_id)
+uint8_t disk_vruns(int8_t vol_id)
 {
     if (vol_id < 0 || vol_id >= VOL_MAX)
         return 0;
 
-    return g_disk.volumes[vol_id].ext_count;
+    return g_disk.volumes[vol_id].run_count;
 }
 
 int disk_vgetattr(int8_t vol_id, uint8_t *attr)
