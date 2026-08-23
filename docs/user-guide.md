@@ -1,0 +1,184 @@
+# User Guide
+
+← [README](../README.md)
+
+This guide covers building FreeCP/M, creating a disk image, and using `sysgen`
+to inspect or modify an image.
+
+## Prerequisites
+
+- RISC-V bare-metal toolchain: `riscv64-unknown-elf-*`
+- `make`
+- `sh`
+- Standard POSIX tools
+
+## Build sysgen
+
+Build the host-side `sysgen` tool:
+
+```sh
+$ make -C sysgen
+```
+
+## Create a disk image
+
+Create a 2 MB Vemu image with 64 KB of RAM:
+
+```sh
+$ ./sysgen/build/sysgen new \
+    --disk-size=2048K \
+    --mem=64K \
+    --platform=vemu \
+    --march=rv32im
+```
+
+| Option | Description |
+|---|---|
+| `--disk-size` | Disk size in KB. Requires a `K` suffix, e.g. `2048K` |
+| `--mem` | RAM size in KB. Requires a `K` suffix, e.g. `64K` |
+| `--platform` | Target platform. `vemu` is included with the repository |
+| `--march` | RISC-V ISA. Defaults to `rv32i` |
+| `--no-extra` | Do not install optional apps from `apps/extra` |
+
+`sysgen new` always writes the image to:
+
+```text
+$ sysgen/build/disk.img
+```
+
+The image contains four formatted volumes, A:–D:. The maximum useful disk size is the size of a single volume.
+
+## Inspect an image
+
+### List files
+
+```sh
+$ sysgen dir
+```
+
+Lists files on A:.
+
+### Show volume usage
+
+```sh
+$ sysgen stat
+```
+
+Shows volume usage.
+
+### Display a file
+
+```sh
+$ sysgen type HELLO.TXT
+```
+
+Prints a file from A:.
+
+## Modify an image
+
+### Add a file
+
+```sh
+$ sysgen add myprog.com
+```
+
+Adds a file to A:. Existing files are skipped.
+
+Use `--dst=Vn` to select a volume and user area:
+
+```sh
+$ sysgen add myprog.com --dst=B0
+```
+
+Use `--attr` to set attributes. The default for `add` is `RW`.
+
+### Install a program
+
+```sh
+$ sysgen install myapp
+```
+
+Compiles a source folder and installs the resulting program.
+
+Use:
+
+```sh
+$ sysgen install myapp --dst=A0 --attr=RW
+```
+
+`install` accepts a source folder and scans it for `.c`, `.s`, and `.S` files.
+
+### Delete a file
+
+```sh
+$ sysgen era myprog.com
+```
+
+Deletes a file from the image.
+
+## Bundled applications
+
+Install the bundled system commands:
+
+```sh
+$ sysgen install --sys-apps
+```
+
+Install the optional applications:
+
+```sh
+$ sysgen install --extra-apps
+```
+
+`--sys-apps` installs system commands as `SYS+RO`.
+`--extra-apps` installs optional applications as `RO`.
+
+Use `--no-extra` with `sysgen new` to omit optional applications.
+
+See [Bundled Apps](bundled-apps.md) for the applications included with FreeCP/M.
+
+## Extract files
+
+Extract all files from an image:
+
+```sh
+$ sysgen extract
+```
+
+Files are written to:
+
+```text
+sysgen/build/extract/
+```
+
+Extraction includes files regardless of their attributes and searches all
+volumes and user areas.
+
+## Recover files from a damaged image
+
+`sysgen extract` can recover files without relying on the normal boot/kernel
+area.
+
+```sh
+$ sysgen extract
+
+$ ./sysgen/build/sysgen new \
+    --disk-size=2048K \
+    --mem=64K \
+    --platform=vemu
+
+$ sysgen add sysgen/build/extract
+```
+
+The extracted files are restored to A: user 0. Files already installed in the
+new image are skipped.
+
+## Build and run a program
+
+For application development, see the [Developer Guide](developer-guide.md).
+
+The usual workflow is:
+
+```text
+write source → build/install with sysgen → run from FreeCP/M
+```

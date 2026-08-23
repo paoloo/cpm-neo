@@ -1,0 +1,102 @@
+# Syscall Reference
+
+← [README](../README.md)
+
+FreeCP/M applications access OS services through system calls. The SDK
+provides `sys_<name>()` wrappers in `syscall.h`. Assembly programs can invoke
+the same services through `%SYSCALL`.
+
+## Calling convention
+
+Arguments are passed in `a0`–`a3`.
+
+The kernel publishes the syscall table pointer in environment slot 0.
+Syscall `N` is at byte offset `N * 4` in the table.
+
+```asm
+lw   t2, N*4(t1)
+jalr ra, 0(t2)
+```
+
+Most syscalls return `0` or a positive result on success and a negative errno
+on failure. File handles are non-negative values; standard handles such as
+`FD_STDIN`, `FD_STDOUT`, and `FD_STDERR` are defined by the SDK.
+
+The syscall table field order is the ABI. New syscalls may only be appended.
+
+## Syscall table
+
+| # | Name | Description | Arguments | Returns |
+|---:|---|---|---|---|
+| 0 | `open` | Open an existing file | `path*`, `writable` | Handle ≥ 3, or negative errno |
+| 1 | `read` | Read from a file | `fh`, `buf*`, `size` | Bytes read, or negative errno if nothing was read |
+| 2 | `write` | Write to a file | `fh`, `buf*`, `size` | Bytes written, or negative errno if nothing was written |
+| 3 | `close` | Close a file | `fh` | `0`, or negative errno |
+| 4 | `exit` | Terminate the program | `code` | Never returns |
+| 5 | `args` | Get command-line arguments | `out*` (`ArgBlock`) | Argument count, 0–8 |
+| 6 | `findfile` | Search for a file | `pattern*`, `out*`, `start_pos` | Directory index, or negative errno |
+| 7 | `getsize` | Get file size | `fh` | File size |
+| 8 | `create` | Create a file | `path*` | Handle ≥ 3, or negative errno |
+| 9 | `delete` | Delete a file | `path*` | `0`, or negative errno |
+| 10 | `rename` | Rename a file | `old*`, `new*` | `0`, or negative errno |
+| 11 | `mount` | Mount a volume | `volid` | `0`, or negative errno |
+| 12 | `unmount` | Unmount or shrink a volume | `volid`, `n` | `0`, or negative errno |
+| 13 | `extend` | Extend a mounted volume | `volid`, `n` | `0`, or negative errno |
+| 14 | `vstat` | Get volume information | `volid`, `out*` | `0`, or negative errno |
+| 15 | `exec` | Load and execute a program | `path*`, `argc`, `argv*` | Never returns on success; errno on failure |
+| 16 | `dev` | Access a memory-mapped I/O register | `reg`, `cmd`, `data*` | `0`, or negative errno |
+| 17 | `fsetattr` | Get or set file attributes | `name*`, `attr` | `0`, or negative errno |
+| 18 | `info` | Get system information | `out*` | `0`, or negative errno |
+| 19 | `seek` | Set file position | `fh`, `pos` | `0`, or negative errno |
+| 20 | `getctx` | Get filesystem context | `out*` | `0` |
+| 21 | `setctx` | Restore filesystem context | `ctx` | `0`, or negative errno |
+| 22 | `getenv` | Read an environment slot | `slot` | Slot value, or `-1` if invalid |
+| 23 | `setenv` | Write an environment slot | `slot`, `value` | `0`, or `-1` if invalid or protected |
+| 24 | `vsetattr` | Get or set volume attributes | `volid`, `attr` | `0`, or negative errno |
+| 25 | `time` | Get platform-specific time | — | Platform-defined |
+| 26 | `sync` | Flush filesystem changes | — | `0`, or negative errno |
+| 27 | `consize` | Get console dimensions | `cw*`, `ch*` | `0` |
+
+## Volume operations
+
+Volumes are A:–D:. Each volume is composed of ordered physical extents recorded
+in the VMAP.
+
+| Syscall | Operation |
+|---|---|
+| `mount(volid)` | Mount an unmounted volume and format it |
+| `extend(volid, n)` | Add `n` blocks to a mounted volume |
+| `unmount(volid, 0)` | Unmount the volume |
+| `unmount(volid, n)` | Remove `n` blocks from the end of the volume |
+
+Volume layout is stored in the VMAP; see [Disk Format](disk-format.md) for the
+on-disk representation and volume limits.
+
+`setctx()` cannot bind to an unmounted volume. Filesystem validation rejects
+volume layouts containing overlapping or out-of-range file blocks.
+
+## SysInfo
+
+`info()` fills the `SysInfo` structure.
+
+| Field | Description |
+|---|---|
+| `tpa` | Available Transient Program Area in KB |
+| `os_version` | Operating system version |
+| `kern_version` | Kernel version |
+| `ccp_version` | CCP version |
+| `vol_mounted[4]` | 1 if mounted, 0 otherwise |
+| `disk_size_kb` | Disk block-grid capacity in KB |
+| `disk_unalloc_kb` | Unallocated block pool in KB |
+
+## Environment slots
+
+FreeCP/M provides four environment slots. Slots 0–2 are reserved by the
+system; slot 3 is available to applications.
+
+| Slot | Purpose |
+|---:|---|
+| 0 | Syscall table pointer; write-protected |
+| 1 | Return code of the last program/command; read-only to programs |
+| 2 | CCP batch offset; writable only by the CCP |
+| 3 | User-defined |
