@@ -75,7 +75,7 @@ static CmdErr stat_dsk(void)
     {
         if (!si.vol_mounted[v] || vstat(v, &vs) != EOK)
         {
-            printf("  %c:  %-3s  %4s %5s\n", 'A' + v, "-", "-", "-");
+            printf("%3c:%6s%6s%7s\n", 'A' + v, "-", "-", "-");
             continue;
         }
 
