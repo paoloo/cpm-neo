@@ -2,7 +2,7 @@
 
 # FreeCP/M
 
-**A modern take on the classic CP/M operating system**
+**A CP/M-inspired operating system**
 
 [![Try it Online](https://img.shields.io/badge/Try_it_Online-mazin--o3.github.io%2Fvemu-blue?style=for-the-badge&logo=riscv)](https://mazin-o3.github.io/vemu/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
