@@ -129,23 +129,38 @@ static int make_name83(const char *src, char *out)
     const char *dot = strchr(src, '.');
 
     int nbase = dot ? (int)(dot - src) : (int)strlen(src);
-    
-    if (nbase == 0) 
-        return EINVAL; 
+
+    if (nbase == 0)
+        return EINVAL;
 
     if (nbase > NAME83_BASE)
         nbase = NAME83_BASE;
-        
-    for (int i = 0; i < nbase; i++)
+
+    /* DRI CCP rule: a '*' fills the remainder of its own field with '?',
+     * and any characters after it are discarded until the field delimiter
+     * ('.') or end of input.  Unspecified fields stay blank, and blanks
+     * match only blanks during directory searches. */
+    int i = 0;
+    while (i < nbase && src[i] != '*')
+    {
         out[i] = toupper((unsigned char)src[i]);
+        i++;
+    }
+    if (i < nbase)
+        memset(out + i, '?', NAME83_BASE - i);
 
     if (dot)
     {
-        dot++;
-        for (int e = 0; e < NAME83_EXT && *dot; e++) {
-            if (*dot == '.') break; 
-            out[NAME83_BASE + e] = toupper((unsigned char)*dot++);
+        const char *q = dot + 1;
+        int e = 0;
+        while (e < NAME83_EXT && *q && *q != '.' && *q != '*')
+        {
+            out[NAME83_BASE + e] = toupper((unsigned char)*q);
+            e++;
+            q++;
         }
+        if (*q == '*' && e < NAME83_EXT)
+            memset(out + NAME83_BASE + e, '?', NAME83_EXT - e);
     }
 
     return EOK;

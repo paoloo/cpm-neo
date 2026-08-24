@@ -187,6 +187,20 @@ static void entry_to_name(const uint8_t *entry, char *out)
     out[out_pos] = '\0';
 }
 
+/*
+ * Copy a directory entry into its raw blank-padded base and extension
+ * fields.  Matching follows real CP/M: the FDOS compares all 11 bytes,
+ * where '?' matches any character (including blanks) and blanks match
+ * only blanks.  No trimming — padding participates in the comparison.
+ */
+static void entry_fields(const uint8_t *entry, char *base, char *ext)
+{
+    memcpy(base, entry, NAME83_BASE);
+    base[NAME83_BASE] = '\0';
+    memcpy(ext, entry + NAME83_BASE, NAME83_EXT);
+    ext[NAME83_EXT] = '\0';
+}
+
 static Volume *vol_for(int8_t vol_id)
 {
     return (vol_id < 0 || vol_id >= VOL_MAX) ? NULL : &g_bd.vol[vol_id];
@@ -1197,42 +1211,16 @@ int bd_seek(int fd, uint32_t offset)
 int bd_find(const char *pat, FsContext ctx, FileInfo *out, uint16_t start_pos)
 {
     CHECK_VOL(v, ctx.vol_id);
-    char pat_dot[FILENAME_MAX];
-    int base_len = 0, ext_len = 0, out_pos = 0;
 
-    while (base_len < NAME83_BASE && pat[base_len] && pat[base_len] != ' ')
-        base_len++;
-
-    /* Only scan the extension when the name part is followed by more input
-     * (a padded 8.3 pattern); a plain NUL-terminated string has no ext. */
-    if (pat[base_len] != '\0')
-    {
-        while (ext_len < NAME83_EXT && pat[NAME83_BASE + ext_len] && pat[NAME83_BASE + ext_len] != ' ')
-            ext_len++;
-    }
-
-    int ext_pure_wild = 1;
-    for (int i = 0; i < ext_len; i++)
-    {
-        char c = pat[NAME83_BASE + i];
-        if (c != '*' && c != '?')
-        {
-            ext_pure_wild = 0;
-            break;
-        }
-    }
-
-    for (int i = 0; i < base_len; i++)
-        pat_dot[out_pos++] = pat[i];
-
-    if (ext_len > 0)
-    {
-        pat_dot[out_pos++] = '.';
-        for (int i = 0; i < ext_len; i++)
-            pat_dot[out_pos++] = pat[NAME83_BASE + i];
-    }
-
-    pat_dot[out_pos] = '\0';
+    /* Callers must supply the padded 8.3 form (see make_name83):
+     * base at pat[0..7], extension at pat[8..10].  Fields are compared
+     * raw — '?' matches any byte, blanks only blanks — so an ambiguous
+     * reference never crosses the '.' boundary. */
+    char base_pat[NAME83_BASE + 1], ext_pat[NAME83_EXT + 1];
+    memcpy(base_pat, pat, NAME83_BASE);
+    base_pat[NAME83_BASE] = '\0';
+    memcpy(ext_pat, pat + NAME83_BASE, NAME83_EXT);
+    ext_pat[NAME83_EXT] = '\0';
 
     uint16_t start_s = start_pos / BD_ENTRIES_PER_SEC;
 
@@ -1260,18 +1248,13 @@ int bd_find(const char *pat, FsContext ctx, FileInfo *out, uint16_t start_pos)
 
             char name[FILENAME_MAX];
             entry_to_name(entry, name);
-            if (!wildmatch(pat_dot, name))
-            {
-                if (!ext_pure_wild)
-                    continue;
 
-                char alt[FILENAME_MAX];
-                memcpy(alt, pat, base_len);
-                alt[base_len] = '\0';
-
-                if (!wildmatch(alt, name))
-                    continue;
-            }
+            /* Per-field FCB matching: the pattern never crosses the '.'
+             * boundary, and a blank extension matches only blank ones. */
+            char cand_base[NAME83_BASE + 1], cand_ext[NAME83_EXT + 1];
+            entry_fields(entry, cand_base, cand_ext);
+            if (!wildmatch(base_pat, cand_base) || !wildmatch(ext_pat, cand_ext))
+                continue;
 
             uint8_t match_buf[BD_ENTRY_SIZE];
             memcpy(match_buf, entry, BD_ENTRY_SIZE);

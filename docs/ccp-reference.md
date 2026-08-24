@@ -37,20 +37,39 @@ the volume may be omitted.
 
 ## Wildcards
 
+Matching follows CP/M FCB semantics: the filename and filetype are
+separate fields, and a pattern never crosses the `.` boundary.
+
 | Symbol | Meaning |
 |---|---|
-| `?` | Matches one character |
-| `*` | Matches the rest of the name or extension |
+| `?` | Matches any single character in its field, including blanks |
+| `*` | Fills the rest of its field (`name` or `type`) with `?`; characters after a `*` are ignored |
 
-Examples:
+Fields left unspecified stay blank, and blanks match only blanks.
+Consequences worth remembering:
 
-```text
-A> DIR ?.COM
-A> DIR ???.TXT
-A> DIR S*.BAT
-A> DIR *.???
-A> ERA ???.BAK
-```
+- `*.*` matches **all** files (a `?` also matches blank padding).
+- A bare `*`, `*.`, or `X*` leaves the type blank, so it matches only
+  files **without an extension** — on disks where every file has a type
+  these list nothing.
+- `D*S` means `D???????`: everything after `*` in the same field is
+  discarded.
+
+
+| Pattern | Selects | Why |
+|---|---|---|
+| `DIR *.*` | everything | `?` also matches blank padding |
+| `DIR *.COM` | PIP.COM, STAT.COM | type fixed, name all-wild |
+| `DIR D*.*` | DATA1.TXT | name starts with D, any type |
+| `DIR *` | MAKEFILE only | blank type matches blank type |
+| `DIR *.` | MAKEFILE only | same as bare `*` |
+| `DIR D*` | nothing here | D-names without a type don't exist |
+| `DIR L*O.DAT` | — | `*` ends the field: reads as `L???????.DAT` |
+| `ERA *.TXT` | erases DATA1.TXT | wildcards work in ERA |
+| `STAT ?ATA1.TXT` | DATA1.TXT | `?` fills single positions |
+
+The classic CP/M habit follows from the table: to act on a whole disk,
+type `*.*` — never a bare `*`.
 
 ## Commands
 
