@@ -458,7 +458,7 @@ int open_disk(const char *path)
     sysgen_set_disk(buf, len);
     if (read16(sysgen_disk() + S0_MAGIC) != DISK_MAGIC)
     {
-        err("'%s' is not a FreeCP/M disk image (bad magic)", path);
+        err("'%s' is not a CP/M Neo disk image (bad magic)", path);
         return -1;
     }
     return 0;

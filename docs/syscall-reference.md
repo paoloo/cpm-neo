@@ -2,7 +2,7 @@
 
 ← [README](../README.md)
 
-FreeCP/M applications access OS services through system calls. The SDK
+CP/M Neo applications access OS services through system calls. The SDK
 provides `sys_<name>()` wrappers in `syscall.h`. Assembly programs can invoke
 the same services through `%SYSCALL`.
 
@@ -91,7 +91,7 @@ volume layouts containing overlapping or out-of-range file blocks.
 
 ## Environment slots
 
-FreeCP/M provides four environment slots. Slots 0–2 are reserved by the
+CP/M Neo provides four environment slots. Slots 0–2 are reserved by the
 system; slot 3 is available to applications.
 
 | Slot | Purpose |

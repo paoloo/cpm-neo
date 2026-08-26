@@ -1,7 +1,7 @@
 #ifndef CCP_H
 #define CCP_H
 
-#include <freecpm.h>
+#include <cpm.h>
 #include <ccplib.h>
 
 /* Limits */

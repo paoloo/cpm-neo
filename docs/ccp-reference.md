@@ -2,7 +2,7 @@
 
 ← [README](../README.md)
 
-FreeCP/M provides an enhanced Console Command Processor (CCP). The resident
+CP/M Neo provides an enhanced Console Command Processor (CCP). The resident
 commands are `DIR`, `DIRS`, `ERA`, `REN`, `TYPE`, `USER`, `ECHO`, and `CLS`.
 Other commands are transient `.COM` programs installed by `sysgen`.
 

@@ -1,7 +1,7 @@
 #ifndef ASM_H
 #define ASM_H
 
-#include <freecpm.h>
+#include <cpm.h>
 
 #define ASM_LINE_SZ 128
 #define MAX_SYMS 128

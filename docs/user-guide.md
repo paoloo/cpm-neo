@@ -2,7 +2,7 @@
 
 ← [README](../README.md)
 
-This guide covers building FreeCP/M, creating a disk image, and using `sysgen`
+This guide covers building CP/M Neo, creating a disk image, and using `sysgen`
 to inspect or modify an image.
 
 ## Prerequisites
@@ -135,7 +135,7 @@ $ sysgen install --extra-apps
 
 Use `--no-extra` with `sysgen new` to omit optional applications.
 
-See [Bundled Apps](bundled-apps.md) for the applications included with FreeCP/M.
+See [Bundled Apps](bundled-apps.md) for the applications included with CP/M Neo.
 
 ## Extract files
 
@@ -180,5 +180,5 @@ For application development, see the [Developer Guide](developer-guide.md).
 The usual workflow is:
 
 ```text
-write source → build/install with sysgen → run from FreeCP/M
+write source → build/install with sysgen → run from CP/M Neo
 ```

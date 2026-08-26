@@ -1,6 +1,6 @@
 /*
  * kernel/bios.h
- * FreeCP/M — kernel interface to the BIOS layer
+ * CP/M Neo — kernel interface to the BIOS layer
  */
 
 #ifndef BIOS_H

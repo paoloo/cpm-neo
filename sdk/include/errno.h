@@ -1,6 +1,6 @@
 /* 
  * libc/errno.h
- * FreeCP/M — unified error code table
+ * CP/M Neo — unified error code table
  *
  * Single set of error codes used by:
  *   - kernel syscall return values

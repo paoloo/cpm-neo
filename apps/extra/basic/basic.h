@@ -1,7 +1,7 @@
 #ifndef BASIC_H
 #define BASIC_H
 
-#include <freecpm.h>
+#include <cpm.h>
 
 #define MAX_TEXT  4096
 #define FOR_MAX   8

@@ -1,6 +1,6 @@
 /*
  * platform/vemu/bios.c
- * FreeCP/M — Vemu hardware BIOS implementation
+ * CP/M Neo — Vemu hardware BIOS implementation
  *
  * Pure physical I/O.  No volume awareness — translation
  * happens in kernel/disk.c.  Includes mmio.h for direct

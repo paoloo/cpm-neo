@@ -25,7 +25,7 @@ $ ./sysgen/build/sysgen add hello.txt --dst=A0 --attr=RW
 
 ### SDK surface
 
-- `freecpm.h` — umbrella header (syscalls + kernel ABI types).
+- `cpm.h` — umbrella header (syscalls + kernel ABI types).
 - `syscall.h` — `sys_open`/`sys_read`/… wrappers over the kernel's
   `SyscallTable` (see [Syscall Reference](syscall-reference.md)).
 - `kernel_abi.h` — shared ABI: the `SyscallTable` type, `SysInfo`, disk

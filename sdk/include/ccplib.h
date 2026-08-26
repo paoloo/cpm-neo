@@ -1,7 +1,7 @@
 #ifndef CCPLIB_H
 #define CCPLIB_H
 
-#include <freecpm.h>
+#include <cpm.h>
 
 /* Command error / return-code convention shared by the CCP and transient
  * commands.  A command returns cmderr_ok() (err_code == 0) on success;
@@ -98,7 +98,7 @@ SplitName split_name83(const char *name);
 /* Copy min(len,w) chars of src into out, space-pad to exactly w chars and
  * NUL-terminate (out must hold w+1 bytes).  Passing len == w just
  * NUL-terminates a view.  Used instead of printf "%-*.*s", which the
- * freecpm printf does not support. */
+ * cpm printf does not support. */
 void pad_field(char *out, const char *src, int len, int w);
 
 /* Strict decimal integer parse: the entire string must be consumed.

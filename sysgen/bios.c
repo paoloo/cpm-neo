@@ -1,6 +1,6 @@
 /*
  * sysgen/bios.c
- * FreeCP/M SYSGEN — Host BIOS adapter
+ * CP/M Neo SYSGEN — Host BIOS adapter
  */
 
 #include "bios.h"

@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
-# FreeCP/M OS build backend — driven by the sysgen tool.
+# CP/M Neo OS build backend — driven by the sysgen tool.
 #
 #   sh sysgen/build_disk.sh --march=<MARCH> --mem=<KB> --platform=<PLATFORM>
 #
 # Builds the bootloader, kernel and CCP into sysgen/build/, next to the
-# tool binary.  Runs from anywhere: it locates the FreeCP/M root relative
+# tool binary.  Runs from anywhere: it locates the CP/M Neo root relative
 # to its own path.  System and user apps are not built here — they are
 # compiled by sysgen/app_build.sh and installed into the disk image by
 # 'sysgen new' / 'sysgen install'.

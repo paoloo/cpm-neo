@@ -1,6 +1,6 @@
 /*
  * libc/limits.h
- * FreeCP/M — implementation limits for the 32-bit int model
+ * CP/M Neo — implementation limits for the 32-bit int model
  *
 */
 

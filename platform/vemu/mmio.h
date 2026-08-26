@@ -1,6 +1,6 @@
 /*
  * bios/mmio.h
- * FreeCP/M — memory-mapped I/O register definitions
+ * CP/M Neo — memory-mapped I/O register definitions
  *
  * Shared by the kernel, libc, and BIOS. Never include from user programs.
  */

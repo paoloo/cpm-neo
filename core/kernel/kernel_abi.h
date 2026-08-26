@@ -1,5 +1,5 @@
 /*
- * kernel/kernel_abi.h — kernel ↔ userspace ABI
+ * kernel/kernel_abi.h — kernel userspace ABI
  *
  * Shared types, constants, and on-disk format definitions between the
  * kernel and transient commands.  Apps include this transitively via
@@ -94,7 +94,7 @@ typedef struct
 typedef struct
 {
     uint32_t tpa;                     /* transient program area base */
-    uint16_t os_version;              /* FreeCP/M version */
+    uint16_t os_version;              /* CP/M Neo version */
     uint16_t kern_version;            /* kernel build version */
     uint16_t ccp_version;             /* CCP build version */
     uint16_t disk_size_kb;            /* block grid capacity (KB) */

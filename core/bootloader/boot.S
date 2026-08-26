@@ -1,6 +1,6 @@
 /*
  * bootloader/boot.S
- * FreeCP/M Bootloader
+ * CP/M Neo Bootloader
  */
 
 /* S0 (sector-0) field offsets come from core/kernel/s0_layout.h — the single
@@ -46,14 +46,8 @@ _boot_start:
     li   t1, BOOT_SIG
     bne  t0, t1, err_disk
 
-    /* Print banner strings ("Loading FreeCP/M X.Y ...\n\n") */
+    /* Print banner ("Loading CP/M Neo ...\n\n") */
     la   t0, msg_prefix
-    jal  ra, print_str
-    lhu  t0, S0_OS_VER(s7)
-    jal  ra, print_ver
-    la   t0, msg_starting
-    jal  ra, print_str
-    la   t0, msg_nl
     jal  ra, print_str
 
     /* Print ASCII art */
@@ -66,8 +60,6 @@ _boot_start:
     la   t0, msg_art_4
     jal  ra, print_str
     la   t0, msg_art_5
-    jal  ra, print_str
-    la   t0, msg_art_6
     jal  ra, print_str
 
     /* Load kernel target address safely (handling 2-byte alignment at 0x006) */
@@ -161,15 +153,12 @@ err_disk:
     j    .Lspin
 
 /* ── Strings ─────────────────────────────────────────────── */
-msg_prefix:     .asciz "Loading FreeCP/M "
-msg_starting:   .asciz " ...\n"
-msg_nl:         .asciz "\n"
-msg_art_1:      .asciz "  ______              _____ _____   ____  __ \n"
-msg_art_2:      .asciz " |  ____|            / ____|  __ \\ / /  \\/  |\n"
-msg_art_3:      .asciz " | |__ _ __ ___  ___| |    | |__) / /| \\  / |\n"
-msg_art_4:      .asciz " |  __| '__/ _ \\/ _ \\ |    |  ___/ / | |\\/| |\n"
-msg_art_5:      .asciz " | |  | | |  __/  __/ |____| |  / /  | |  | |\n"
-msg_art_6:      .asciz " |_|  |_|  \\___|\\___|\\_____|_| /_/   |_|  |_|\n"
+msg_prefix:     .asciz "Loading CP/M Neo ...\n\n"
+msg_art_1:      .asciz "   ____ ____   ____  __   _   _ _____ ___  \n"
+msg_art_2:      .asciz "  / ___|  _ \\ / /  \\/  | | \\ | | ____/ _ \\ \n"
+msg_art_3:      .asciz " | |   | |_) / /| |\\/| | |  \\| |  _|| | | |\n"
+msg_art_4:      .asciz " | |___|  __/ / | |  | | | |\\  | |__| |_| |\n"
+msg_art_5:      .asciz "  \\____|_| /_/  |_|  |_| |_| \\_|_____\\___/ \n"
 msg_err_disk:   .asciz "  \nDISK ERR\n"
 msg_err_kernel: .asciz "  \nKERNEL ERR\n"
 

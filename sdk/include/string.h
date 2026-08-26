@@ -1,6 +1,6 @@
 /* 
  * libc/string.h
- * FreeCP/M — string and memory utilities (software only)
+ * CP/M Neo — string and memory utilities (software only)
  * 
  *
  * Prototypes here must match the definitions in string.c exactly.

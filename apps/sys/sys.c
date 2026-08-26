@@ -12,7 +12,7 @@ static CmdErr cmd_sys(FsContext *ctx, int argc, char **argv)
     if (sys_info(&si) != EOK)
         return cmderr_bdos(ctx->vol_id, EIO);
 
-    printf("FreeCP/M v%u.%u\n", si.os_version >> 8, si.os_version & 0xFF);
+    printf("CP/M Neo v%u.%u\n", si.os_version >> 8, si.os_version & 0xFF);
     printf("   Kernel    v%u.%u\n", si.kern_version >> 8, si.kern_version & 0xFF);
     printf("   CCP       v%u.%u\n", si.ccp_version >> 8, si.ccp_version & 0xFF);
     printf("   TPA       %uk\n", si.tpa);

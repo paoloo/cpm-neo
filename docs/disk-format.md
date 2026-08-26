@@ -2,7 +2,7 @@
 
 ← [README](../README.md)
 
-A FreeCP/M disk image is a sequence of 512-byte sectors.
+A CP/M Neo disk image is a sequence of 512-byte sectors.
 
 ## Disk layout
 

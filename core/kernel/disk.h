@@ -1,6 +1,6 @@
 /*
  * kernel/disk.h
- * FreeCP/M — block/run volume-map disk abstraction layer
+ * CP/M Neo — block/run volume-map disk abstraction layer
  *
  * Disk layout:
  *   Sector 0 : boot sector (geometry + kernel/CCP pointers)

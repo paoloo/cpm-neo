@@ -1,6 +1,6 @@
 /*
   * sysgen/mkdisk.c
- * FreeCP/M SYSGEN — disk image assembly
+ * CP/M Neo SYSGEN — disk image assembly
  *
  * Writes sector 0 (geometry), the VMAP at sector 1 (block grid + VolRec[4]),
  * the kernel image (with BOOT_MAGIC trailer), the raw CCP binary, and a

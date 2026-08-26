@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# FreeCP/M generic app builder — compiles any source folder to a .com.
+# CP/M Neo generic app builder — compiles any source folder to a .com.
 #
 #   sh sysgen/app_build.sh <MARCH> <APP_DIR> [-o OUT.com]
 #
@@ -8,7 +8,7 @@
 # (sdk/lib/libc.a, sdk/obj/entry.o, core/int/kernel.elf).  Object files
 # go under build/apps/obj/<appname>/ mirroring the source layout so
 # multi-file apps with repeated filenames never collide.  Runs from
-# anywhere: it locates the FreeCP/M root relative to its own path.
+# anywhere: it locates the CP/M Neo root relative to its own path.
 
 set -eu
 

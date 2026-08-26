@@ -1,5 +1,5 @@
-#ifndef FREECPM_H
-#define FREECPM_H
+#ifndef CPM_H
+#define CPM_H
 
 #include <kernel_abi.h>
 #include <syscall.h>

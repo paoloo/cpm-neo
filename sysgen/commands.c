@@ -284,7 +284,7 @@ static void report_build(uint32_t size_kb, uint32_t boot_size, uint32_t kern_siz
     char tmp[32];
 
     printf("\n=============================================================\n");
-    printf("  FreeCP/M Disk Build Report\n");
+    printf("  CP/M Neo Disk Build Report\n");
     printf("=============================================================\n");
     printf("  Output file      : %s\n", out_disk_path);
     hr(tmp, sizeof(tmp), size_kb * 1024);
@@ -450,7 +450,7 @@ static bool validate_build_env(const SysgenPaths *paths, const char *platform)
     snprintf(path_buf, sizeof(path_buf), "%s/core/kernel/bdos.c", paths->root_dir);
     if (!file_exists(path_buf))
     {
-        err("Cannot locate FreeCP/M root directory at '%s'", paths->root_dir);
+        err("Cannot locate CP/M Neo root directory at '%s'", paths->root_dir);
         return false;
     }
 

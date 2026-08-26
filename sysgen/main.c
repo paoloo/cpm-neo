@@ -1,6 +1,6 @@
 /*
  * sysgen/main.c
- * FreeCP/M SYSGEN — Entry point & Command routing
+ * CP/M Neo SYSGEN — Entry point & Command routing
  */
 
 #include "utils.h"
@@ -12,7 +12,7 @@
 static void usage(void)
 {
     printf(
-        "\n*** FreeCP/M SYSGEN Utility ***\n\n"
+        "\n*** CP/M Neo SYSGEN Utility ***\n\n"
         "Usage:\n\n"
         "  sysgen new <args> [opts]        Create a new disk image\n"
         "      --disk-size=<KB>   Size in KB (e.g., 2048K)\n"

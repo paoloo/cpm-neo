@@ -1,7 +1,7 @@
 #ifndef ED_H
 #define ED_H
 
-#include <freecpm.h>
+#include <cpm.h>
 
 #define EDIT_BUF_SIZE  4096
 #define ED_MAX_LINES   2048

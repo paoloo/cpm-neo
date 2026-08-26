@@ -1,4 +1,4 @@
-# FreeCP/M SYSGEN — the project's only makefile.
+# CP/M Neo SYSGEN — the project's only makefile.
 
 CC      ?= cc
 CFLAGS  ?= -Os -Wall -Wextra
@@ -55,7 +55,7 @@ $(OBJ_DIR)/disk.o: ../core/kernel/disk.c ../core/kernel/disk.h ../core/kernel/ke
 	$(CC) $(CFLAGS) $(INC_BDOS) -c $< -o $@
 
 help:
-	@echo "FreeCP/M SYSGEN — project makefile"
+	@echo "CP/M Neo SYSGEN — project makefile"
 
 debug:
 	@[ -f $(BUILD_DIR)/core/int/bootloader.elf ] || { echo "run 'sysgen new ...' first" >&2; exit 1; }
