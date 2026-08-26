@@ -112,6 +112,13 @@ CP/M Neo is structured to isolate user applications from the host hardware, with
 
 ---
 
+## Contributing
+
+Contributions to CP/M Neo are welcome!
+
+If you'd like to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md) for more info.
+
+---
 
 ## License
 
