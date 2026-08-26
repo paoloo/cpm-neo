@@ -63,11 +63,30 @@ See the [Developer Guide](docs/developer-guide.md) to add your own.
 
 ### CCP Navigation
 
-Switch volumes using `A:`, `B:`, `C:`, or `D:`. Switch user areas with `USER n`.
+ CP/M Neo has 4 volumes:
 
-Filespecs follow CP/M 2.2 syntax: `[d:]name[.type]`. A user digit is accepted
-only in two places: the destination of `COPY` (e.g. `COPY F.TXT D7:`) and when
-running a program from another volume/user area (e.g. `B0:PROG`).
+    A:  B:  C:  D:
+
+  Switch volume:
+
+    > B:
+
+  Each volume contains 16 user areas:
+
+    0  1  2  ... 15
+
+  Switch user area:
+
+    > USER 5
+
+  Or use the short form:
+
+    > 12:
+
+  Switch volume and user area:
+
+    > D7:
+    > A0:
 
 Type `help` at the command prompt for the full list of commands.
 
