@@ -10,4 +10,4 @@ Thanks for your interest in CP/M Neo! We welcome contributions of all sizes, fro
 - Refine the build system and tooling
 
 ## Before Making Large Changes
-For significant features, kernel redesigns, or new architecture ports, please **open an issue first**. This allows us to discuss design goals and compatibility before you write code.
+For significant features, kernel changes, or new architecture ports, please **open an issue first** so we can discuss the design before implementation.
