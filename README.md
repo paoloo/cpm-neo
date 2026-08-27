@@ -17,7 +17,7 @@ CP/M Neo requires a RISC-V bare-metal toolchain (`riscv64-unknown-elf-gcc` + bin
 
 ```sh
 make -C sysgen
-./sysgen/build/sysgen new --disk-size=2048K --mem=64K --platform=vemu --march=rv32im
+./sysgen/build/sysgen new --disk-size=2048K --mem=64K --platform=vemu --arch=riscv32
 ```
 
 Everything outputs directly to `sysgen/build/`:
@@ -46,7 +46,7 @@ See the [User Guide](docs/user-guide.md) for the full build and execution walkth
 
 | Command | Description |
 | --- | --- |
-| `new --disk-size=KBK --mem=KBK --platform=NAME --march=isa` | Build the OS and create a disk image (the disk is divided into 1 KB blocks; `--disk-size` is capped at the useful maximum: 4 volumes × 2 MB) |
+| `new --disk-size=KBK --mem=KBK --platform=NAME --arch=ISA` | Build the OS and create a disk image (the disk is divided into 1 KB blocks; `--disk-size` is capped at the useful maximum: 4 volumes × 2 MB) |
 | `add <file> [--dst=Vn] [--attr=R/W\|R/O\|SYS]` | Add an external file to an image |
 | `install <folder> [--dst=Vn] [--attr=...]` | Compile a source folder and install the binaries |
 | `dir [Vn]` | List files on a volume |

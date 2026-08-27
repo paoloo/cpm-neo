@@ -24,7 +24,8 @@ int mkdisk_build(uint32_t size_kb,
                 const uint8_t *kern, uint32_t kern_size,
                 const uint8_t *ccp, uint32_t ccp_size,
                 uint32_t kern_load,
-                uint16_t os_ver, uint16_t kern_ver, uint16_t ccp_ver);
+                uint16_t os_ver, uint16_t kern_ver, uint16_t ccp_ver,
+                const char *platform);
 
 /* Minimum disk size (KB) so every volume can hold min-viable blocks */
 int mkdisk_min_size_kb(uint32_t kern_size, uint32_t ccp_size);

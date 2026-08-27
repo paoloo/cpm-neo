@@ -1,4 +1,3 @@
-OUTPUT_FORMAT("elf32-littleriscv")
 ENTRY(_entry)
 
 /* __KERN_START and __mem_size supplied via --defsym= in the two-pass build */

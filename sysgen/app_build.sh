@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # CP/M Neo generic app builder — compiles any source folder to a .com.
 #
-#   sh sysgen/app_build.sh <MARCH> <APP_DIR> [-o OUT.com]
+#   sh sysgen/app_build.sh <ARCH> <APP_DIR> [-o OUT.com]
 #
 # Scans <APP_DIR> recursively for .c/.s/.S sources and links a raw .com
 # binary ready to run from the TPA.  Requires a prior 'sysgen new' build
@@ -12,7 +12,7 @@
 
 set -eu
 
-MARCH=${1:?}
+ARCH=${1:?}
 APP_DIR=${2:?}
 OUT=
 shift 2
@@ -53,19 +53,22 @@ INT="$BUILD/core/int"
 SDK_OBJ="$BUILD/sdk/obj"
 SDK_LIB="$BUILD/sdk/lib"
 
-CROSS_COMPILE=${CROSS_COMPILE:-riscv64-unknown-elf-}
+# Architecture metadata (toolchain prefix + CFLAGS) from arch/$ARCH/config.sh
+# shellcheck source=/dev/null
+. "arch/$ARCH/config.sh"
+
 CC=${CROSS_COMPILE}gcc
 LD=${CROSS_COMPILE}ld
 OBJCOPY=${CROSS_COMPILE}objcopy
 
-ARCH="-march=$MARCH -mabi=ilp32"
-LIBGCC=$($CC $ARCH -print-libgcc-file-name)
+ARCH_FLAGS="$ARCH_CFLAGS"
+LIBGCC=$($CC $ARCH_FLAGS -print-libgcc-file-name)
 
-CFLAGS="$ARCH -ffreestanding -nostdlib \
-       -Os -ffunction-sections -fdata-sections \
-       -fno-builtin -fomit-frame-pointer \
-       -Wall -Wextra"
-LDFLAGS="--gc-sections --strip-debug --no-warn-rwx-segments"
+CFLAGS="$ARCH_FLAGS -ffreestanding -nostdlib \
+        -Os -ffunction-sections -fdata-sections \
+        -fno-builtin -fomit-frame-pointer \
+        -Wall -Wextra"
+LDFLAGS="--gc-sections --strip-debug --no-warn-rwx-segments -m $LD_EMULATION"
 SDK_INC="-I sdk/include -I core/kernel/ -I core/ -I ./"
 
 APP_NAME=$(basename "$APP_DIR")

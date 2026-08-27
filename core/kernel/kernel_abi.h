@@ -100,6 +100,7 @@ typedef struct
     uint16_t disk_size_kb;            /* block grid capacity (KB) */
     uint16_t disk_unalloc_kb;         /* unallocated pool (KB) */
     uint8_t  vol_mounted[VOL_MAX];    /* 1 = mounted                    */
+    char     platform[9];             /* platform name, NUL-terminated  */
 } SysInfo;
 
 /* Little-endian byte accessors */

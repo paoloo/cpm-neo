@@ -70,31 +70,31 @@ const char *err_str(int rc)
     switch (rc)
     {
     case EIO:
-        return "I/O error";
+        return "I/O Error";
     case EBADFS:
-        return "bad filesystem";
+        return "Bad Filesystem";
     case ENOVOL:
-        return "no such volume";
+        return "No Volume";
     case ENFILE:
-        return "no free file handle";
+        return "No Free File Handle";
     case ENOENT:
-        return "not found";
+        return "Not Found";
     case EBADF:
-        return "bad file handle";
+        return "Bad File Handle";
     case ENOSPC:
-        return "disk full";
+        return "Disk Full";
     case EVOLRO:
-        return "volume read-only";
+        return "Volume Read-only";
     case EEXIST:
-        return "already exists";
+        return "File Exists";
     case EFILERO:
-        return "file read-only";
+        return "File Read-only";
     case EDIRFULL:
-        return "directory full";
+        return "Directory Full";
     case EPERM:
-        return "permission denied";
+        return "Permission Denied";
     default:
-        return "error";
+        return "Unknown";
     }
 }
 
@@ -137,6 +137,7 @@ int reject_unknown_flags(int argc, char **argv, const char *const *allowed)
                 break;
             }
         }
+
         if (!ok)
         {
             err("unknown option '%s'", argv[i]);
@@ -153,6 +154,7 @@ int collect_positional(int argc, char **argv, const char **out, int max_out)
     {
         if (argv[i][0] == '-' && argv[i][1] == '-')
             continue;
+
         if (n < max_out)
             out[n] = argv[i];
         n++;
@@ -171,6 +173,7 @@ const char *resolve_disk(int argc, char **argv, char *buf, size_t n)
         snprintf(buf, n, "%s", v);
     else
         sysgen_default_disk(buf, n);
+
     return buf;
 }
 
@@ -178,12 +181,15 @@ long parse_sized_kb(const char *s)
 {
     if (!s || !*s)
         return -1;
+
     char *end = NULL;
     long v = strtol(s, &end, 10);
     if (end == s || *end == '\0')
         return -1;
+
     if ((*end == 'K' || *end == 'k') && end[1] == '\0')
         return v;
+
     return -1;
 }
 
@@ -195,19 +201,23 @@ int parse_vn(const char *s, int *vol, int *user)
         *user = 0;
         return 0;
     }
+
     char c = (char)toupper((unsigned char)s[0]);
     if (c < 'A' || c > 'D')
         return -1;
+
     *vol = c - 'A';
     int u = 0;
     for (int i = 1; s[i]; i++)
     {
         if (!isdigit((unsigned char)s[i]))
             return -1;
+
         u = u * 10 + (s[i] - '0');
         if (u > USER_AREA_MAX)
             return -1;
     }
+
     *user = u;
     return 0;
 }
@@ -238,19 +248,24 @@ int file_exists(const char *p)
 
 void hr(char *out, size_t n, uint32_t bytes)
 {
-    if (bytes >= 1024 * 1024) {
+    if (bytes >= 1024 * 1024)
+    {
         uint32_t mb = bytes / (1024 * 1024);
         if (bytes % (1024 * 1024) == 0)
             snprintf(out, n, "%u MB", mb);
         else
             snprintf(out, n, "%.2f MB", (double)bytes / (1024.0 * 1024.0));
-    } else if (bytes >= 1024) {
+    }
+    else if (bytes >= 1024)
+    {
         uint32_t kb = bytes / 1024;
         if (bytes % 1024 == 0)
             snprintf(out, n, "%u KB", kb);
         else
             snprintf(out, n, "%.1f KB", (double)bytes / 1024.0);
-    } else {
+    }
+    else
+    {
         snprintf(out, n, "%u B", bytes);
     }
 }
@@ -301,17 +316,22 @@ static int scan_dir(const char *dir, ComEntry *list, int cap)
     {
         if (de->d_name[0] == '.')
             continue;
+
         char full[1024];
         snprintf(full, sizeof full, "%s/%s", dir, de->d_name);
+
         struct stat st;
         if (stat(full, &st) != 0)
             continue;
+
         snprintf(list[n].path, sizeof list[n].path, "%s", full);
         snprintf(list[n].name, sizeof list[n].name, "%s", de->d_name);
         list[n].is_dir = S_ISDIR(st.st_mode) != 0;
         n++;
     }
+
     closedir(d);
+
 #endif
 
     qsort(list, (size_t)n, sizeof(ComEntry), com_name_cmp);
@@ -323,6 +343,7 @@ int has_source_ext(const char *name)
     const char *e = strrchr(name, '.');
     if (!e)
         return 0;
+
     return strcmp(e, ".c") == 0 || strcmp(e, ".s") == 0 || strcmp(e, ".S") == 0;
 }
 
@@ -334,6 +355,7 @@ int for_each_subdir(const char *dir, SysgenCallback cb, void *ud)
     for (int i = 0; i < n; i++)
         if (list[i].is_dir)
             cb(list[i].path, list[i].name, ud);
+
     return n;
 }
 
@@ -345,6 +367,7 @@ int for_each_source_file(const char *dir, SysgenCallback cb, void *ud)
     for (int i = 0; i < n; i++)
         if (!list[i].is_dir && has_source_ext(list[i].name))
             cb(list[i].path, list[i].name, ud);
+
     return n;
 }
 
@@ -375,6 +398,7 @@ int dir_has_subdirs(const char *dir)
     for (int i = 0; i < n; i++)
         if (list[i].is_dir)
             return 1;
+
     return 0;
 }
 
@@ -388,9 +412,11 @@ int for_each_flat_file(const char *dir, SysgenCallback cb, void *ud)
     {
         if (list[i].is_dir)
             continue;
+
         cb(list[i].path, list[i].name, ud);
         files++;
     }
+
     return files;
 }
 
@@ -419,8 +445,10 @@ int mkdir_p(const char *path)
     char tmp[SYSGEN_PATH_MAX];
     snprintf(tmp, sizeof tmp, "%s", path);
     size_t len = strlen(tmp);
+
     if (len == 0)
         return -1;
+
     for (char *p = tmp + 1; *p; p++)
     {
         if (*p == '/')
@@ -436,6 +464,7 @@ int mkdir_p(const char *path)
     }
     if (mkdir(tmp, 0755) != 0 && errno != EEXIST)
         return -1;
+
     return 0;
 #endif
 }
@@ -449,18 +478,22 @@ int open_disk(const char *path)
         err("cannot read '%s'", path);
         return -1;
     }
+
     if (len < DISK_SECTOR_SIZE || (len % DISK_SECTOR_SIZE) != 0)
     {
         free(buf);
         err("'%s' is not a valid disk image", path);
         return -1;
     }
+
     sysgen_set_disk(buf, len);
+
     if (read16(sysgen_disk() + S0_MAGIC) != DISK_MAGIC)
     {
         err("'%s' is not a CP/M Neo disk image (bad magic)", path);
         return -1;
     }
+
     return 0;
 }
 
@@ -471,6 +504,7 @@ int save_disk(const char *path)
         err("cannot write '%s'", path);
         return -1;
     }
+
     return 0;
 }
 
@@ -483,6 +517,7 @@ int mount_vol(int8_t vol)
             err("volume %c: cannot auto-mount", 'A' + vol);
             return -1;
         }
+
         return 0;
     }
     if (bd_bind(vol) != EOK)
@@ -490,6 +525,7 @@ int mount_vol(int8_t vol)
         err("volume %c: cannot mount", 'A' + vol);
         return -1;
     }
+
     return 0;
 }
 
@@ -616,11 +652,13 @@ int spawn_and_wait(char *const argv[])
         err("waitpid on '%s' failed: %s", argv[0], strerror(errno));
         return -1;
     }
+
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
     {
         err("'%s' exited abnormally or with a nonzero status", argv[0]);
         return -1;
     }
+    
     return 0;
 }
 

@@ -54,6 +54,6 @@ being written or read (it is required, and may not be `NULL`).
 ## Adding a platform
 
 1. Create `platform/<name>/bios.c` implementing the functions in `bios.h`.
-2. Build with `sysgen new ... --platform=<name> --march=<isa>`.
+2. Build with `sysgen new ... --platform=<name> --arch=<isa>`.
 
 See the [User Guide](user-guide.md) for the `sysgen` command reference.

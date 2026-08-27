@@ -1,4 +1,3 @@
-OUTPUT_FORMAT("elf32-littleriscv")
 ENTRY(_entry)
 
 /* Configuration Symbols */

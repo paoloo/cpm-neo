@@ -324,6 +324,7 @@ int sys_read(int fd, void *buf, uint32_t len)
         int r = bd_read(kfd, p + total, chunk);
         if (r < 0)
             return total ? (int)total : r;
+
         total += (uint32_t)r;
         if ((uint16_t)r < chunk)
             break;
@@ -354,10 +355,12 @@ int sys_write(int fd, const void *buf, uint32_t len)
         int w = bd_write(kfd, p + total, chunk);
         if (w < 0)
             return total ? (int)total : w;
+
         total += (uint32_t)w;
         if ((uint16_t)w < chunk)
             break;
     }
+
     return (int)total;
 }
 
@@ -409,6 +412,7 @@ int sys_create(const char *name)
     FsContext ctx = parse_prefix(&name);
     char n83[12];
     int err = make_name83(name, n83);
+
     if (err != EOK)
         return err;
 
@@ -421,6 +425,7 @@ int sys_delete(const char *name)
     FsContext ctx = parse_prefix(&name);
     char n83[12];
     int err = make_name83(name, n83);
+
     if (err != EOK)
         return err;
 
@@ -438,10 +443,12 @@ int sys_rename(const char *old, const char *new)
 
     char old83[12], new83[12];
     int err = make_name83(old, old83);
+
     if (err != EOK)
         return err;
 
     err = make_name83(new, new83);
+
     if (err != EOK)
         return err;
 
@@ -452,6 +459,7 @@ int sys_seek(int fd, uint32_t offset)
 {
     if (fd_is_console(fd))
         return EINVAL;
+
     return bd_seek(resolve_file_fd(fd), offset);
 }
 
@@ -518,6 +526,7 @@ int sys_fsetattr(const char *name, uint8_t attrib)
     FsContext ctx = parse_prefix(&name);
     char n83[12];
     int err = make_name83(name, n83);
+
     if (err != EOK)
         return err;
 
@@ -566,6 +575,10 @@ int sys_info(SysInfo *out)
     out->os_version = read16(&s0[S0_OS_VER]);
     out->kern_version = read16(&s0[S0_KERN_VER]);
     out->ccp_version = read16(&s0[S0_CCP_VER]);
+
+    memcpy(out->platform, &s0[S0_PLATFORM], 8);
+    out->platform[8] = '\0';
+
     out->tpa = ((uint32_t)__kernel_base - TPA_LOAD_ADDR) / 1024;
 
     for (int v = 0; v < VOL_MAX; v++)
@@ -610,6 +623,7 @@ uint32_t sys_getenv(uint8_t slot)
 {
     if (slot >= ENV_SLOTS_MAX)
         return UINT_MAX;
+
     return g_kstate.kenv.env[slot];
 }
 

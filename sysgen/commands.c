@@ -48,8 +48,8 @@ typedef struct
 {
     char *out_com;
     size_t out_n;
-    char *march;
-    size_t march_n;
+    char *arch;
+    size_t arch_n;
 } BuildFolderOpts;
 
 /* Walk-state for recursively installing bundled apps. */
@@ -75,7 +75,7 @@ typedef struct
     long disk_size_kb;
     long mem_bytes;
     const char *platform;
-    const char *march;
+    const char *arch;
     bool no_extra;
 } CmdNewConfig;
 
@@ -199,6 +199,7 @@ static int parse_attr_dflt(int argc, char **argv, uint8_t *attr, uint8_t dflt)
     {
         if (strcasecmp(tok, "RW") == 0 || strcasecmp(tok, "R/W") == 0)
             continue;
+
         if (strcasecmp(tok, "RO") == 0 || strcasecmp(tok, "R/O") == 0)
             *attr |= FILE_ATTR_READ_ONLY;
         else if (strcasecmp(tok, "SYS") == 0)
@@ -209,6 +210,7 @@ static int parse_attr_dflt(int argc, char **argv, uint8_t *attr, uint8_t dflt)
             return 1;
         }
     }
+    
     return 0;
 }
 
@@ -235,7 +237,7 @@ static int setup_disk_target(int argc, char **argv, const char *vn_arg, ImageTar
  * System Generation & Build Logic
  * ========================================================================= */
 
-static int run_build_script(const SysgenPaths *paths, const char *march,
+static int run_build_script(const SysgenPaths *paths, const char *arch,
                             long mem, const char *platform)
 {
     char script[SYSGEN_FULL_PATH_MAX];
@@ -244,8 +246,8 @@ static int run_build_script(const SysgenPaths *paths, const char *march,
     char mem_flag[32];
     snprintf(mem_flag, sizeof(mem_flag), "--mem=%ldK", mem / 1024);
 
-    char march_flag[64];
-    snprintf(march_flag, sizeof(march_flag), "--march=%s", march);
+    char arch_flag[64];
+    snprintf(arch_flag, sizeof(arch_flag), "--arch=%s", arch);
 
     char plat_flag[64];
     snprintf(plat_flag, sizeof(plat_flag), "--platform=%s", platform);
@@ -253,14 +255,14 @@ static int run_build_script(const SysgenPaths *paths, const char *march,
     char *argv[] = {
         (char *)"sh",
         script,
-        march_flag,
+        arch_flag,
         mem_flag,
         plat_flag,
         NULL,
     };
 
-    printf("Starting disk build for %s [March: %s, Mem: %ld KB]\n",
-           platform, march, mem / 1024);
+    printf("Starting disk build for %s [Arch: %s, Mem: %ld KB]\n",
+           platform, arch, mem / 1024);
 
     return spawn_and_wait(argv);
 }
@@ -349,7 +351,7 @@ static const char *const FLAGS_NEW[] = {
     "--disk-size",
     "--mem",
     "--platform",
-    "--march",
+    "--arch",
     "--no-extra",
     NULL,
 };
@@ -394,15 +396,11 @@ static bool parse_cmd_new_args(int argc, char **argv, CmdNewConfig *cfg)
     const char *disk_size_str = get_str_flag(argc, argv, "--disk-size");
     const char *mem_str = get_str_flag(argc, argv, "--mem");
     const char *platform_str = get_str_flag(argc, argv, "--platform");
-    const char *march_str = get_str_flag(argc, argv, "--march");
+    const char *arch_str = get_str_flag(argc, argv, "--arch");
 
     cfg->no_extra = get_bool_flag(argc, argv, "--no-extra");
 
-    if (!disk_size_str)
-    {
-        err("--disk-size required (disk size in KB, e.g. --disk-size=2048K)");
-        return false;
-    }
+    cfg->disk_size_kb = 0; /* 0 means "unset"; resolved to max after build */
 
     if (!mem_str)
     {
@@ -417,13 +415,16 @@ static bool parse_cmd_new_args(int argc, char **argv, CmdNewConfig *cfg)
     }
 
     cfg->platform = platform_str;
-    cfg->march = march_str ? march_str : "rv32i";
+    cfg->arch = arch_str ? arch_str : "riscv32";
 
-    cfg->disk_size_kb = parse_sized_kb(disk_size_str);
-    if (cfg->disk_size_kb <= 0 || cfg->disk_size_kb > 32767)
+    if (disk_size_str)
     {
-        err("invalid --disk-size '%s' (K suffix required, 1..32767)", disk_size_str);
-        return false;
+        cfg->disk_size_kb = parse_sized_kb(disk_size_str);
+        if (cfg->disk_size_kb <= 0)
+        {
+            err("invalid --disk-size '%s' (K suffix required)", disk_size_str);
+            return false;
+        }
     }
 
     long mem_kb = parse_sized_kb(mem_str);
@@ -443,7 +444,7 @@ static bool parse_cmd_new_args(int argc, char **argv, CmdNewConfig *cfg)
     return true;
 }
 
-static bool validate_build_env(const SysgenPaths *paths, const char *platform)
+static bool validate_build_env(const SysgenPaths *paths, const char *platform, const char *arch)
 {
     char path_buf[SYSGEN_FULL_PATH_MAX];
 
@@ -458,6 +459,13 @@ static bool validate_build_env(const SysgenPaths *paths, const char *platform)
     if (!dir_exists(path_buf))
     {
         err("platform '%s' not found under %s/platform/", platform, paths->root_dir);
+        return false;
+    }
+
+    snprintf(path_buf, sizeof(path_buf), "%s/arch/%s", paths->root_dir, arch);
+    if (!dir_exists(path_buf))
+    {
+        err("arch '%s' not found under %s/arch/", arch, paths->root_dir);
         return false;
     }
 
@@ -480,7 +488,7 @@ int cmd_new(int argc, char **argv)
         return 1;
 
     const SysgenPaths *paths = sysgen_paths();
-    if (!validate_build_env(paths, cfg.platform))
+    if (!validate_build_env(paths, cfg.platform, cfg.arch))
         return 1;
 
     char path_buf[SYSGEN_FULL_PATH_MAX];
@@ -490,10 +498,11 @@ int cmd_new(int argc, char **argv)
     snprintf(path_buf, sizeof(path_buf), "%s/core/int/ccp.bin", paths->build_dir);
     uint32_t pc = get_file_size(path_buf);
 
-    if (pk > 0 && pc > 0 && disk_size_over_cap(cfg.disk_size_kb, pk, pc) != 0)
+    if (cfg.disk_size_kb > 0 && pk > 0 && pc > 0 &&
+        disk_size_over_cap(cfg.disk_size_kb, pk, pc) != 0)
         return 1;
 
-    if (run_build_script(paths, cfg.march, cfg.mem_bytes, cfg.platform) != 0)
+    if (run_build_script(paths, cfg.arch, cfg.mem_bytes, cfg.platform) != 0)
         return 1;
 
     int ret = 1;
@@ -540,11 +549,14 @@ int cmd_new(int argc, char **argv)
 
     int min_kb = mkdisk_min_size_kb(ksz, ccpsz);
 
+    if (cfg.disk_size_kb == 0)
+        cfg.disk_size_kb = mkdisk_max_size_kb(ksz, ccpsz);
+
     if (disk_size_over_cap(cfg.disk_size_kb, ksz, ccpsz) != 0)
         goto cleanup;
 
     int reserved = mkdisk_build((uint32_t)cfg.disk_size_kb, kern, ksz, ccp, ccpsz,
-                                kern_load, OS_VER, KERN_VER, CCP_VER);
+                                kern_load, OS_VER, KERN_VER, CCP_VER, cfg.platform);
 
     if (reserved < 0)
     {
@@ -616,12 +628,12 @@ static int build_folder_com(const SysgenPaths *paths, const char *src,
         return 1;
     }
 
-    if (fgets(opts->march, opts->march_n, f) == NULL)
-        opts->march[0] = '\0';
+    if (fgets(opts->arch, opts->arch_n, f) == NULL)
+        opts->arch[0] = '\0';
     fclose(f);
 
-    opts->march[strcspn(opts->march, "\r\n")] = '\0';
-    if (!*opts->march)
+    opts->arch[strcspn(opts->arch, "\r\n")] = '\0';
+    if (!*opts->arch)
     {
         err("missing architecture record '%s' -- re-run 'sysgen new'", arch_path);
         return 1;
@@ -672,7 +684,7 @@ static int build_folder_com(const SysgenPaths *paths, const char *src,
     char *argv_run[] = {
         (char *)"sh",
         script,
-        opts->march,
+        opts->arch,
         dirbuf,
         (char *)"-o",
         opts->out_com,
@@ -687,8 +699,8 @@ static int build_folder_com(const SysgenPaths *paths, const char *src,
 static int build_and_add(BundledScan *scan, const char *src)
 {
     char out_com[SYSGEN_FULL_PATH_MAX + 256];
-    char march_buf[64];
-    BuildFolderOpts bfo = {out_com, sizeof(out_com), march_buf, sizeof(march_buf)};
+    char arch_buf[64];
+    BuildFolderOpts bfo = {out_com, sizeof(out_com), arch_buf, sizeof(arch_buf)};
 
     if (build_folder_com(scan->paths, src, &bfo) != 0)
     {
@@ -1022,8 +1034,8 @@ int cmd_install(int argc, char **argv)
     }
 
     char out_com[SYSGEN_PATH_MAX + 256];
-    char march[64];
-    BuildFolderOpts bfo = {out_com, sizeof(out_com), march, sizeof(march)};
+    char arch[64];
+    BuildFolderOpts bfo = {out_com, sizeof(out_com), arch, sizeof(arch)};
 
     if (build_folder_com(sysgen_paths(), src, &bfo) != 0)
         return 1;
@@ -1091,7 +1103,7 @@ int cmd_extract(int argc, char **argv)
         {
             FsContext ctx = {(int8_t)v, u};
             FileInfo fi;
-            char allpat[NAME83_LEN + 1] = "*";
+            char allpat[NAME83_LEN + 1] = "***********"; /* 8 base + 3 ext */
             uint16_t pos = 0;
             int rc;
 
@@ -1191,7 +1203,7 @@ int cmd_dir(int argc, char **argv)
     uint16_t pos_lba = 0;
     int count = 0;
     int rc = 0;
-    char allpat[NAME83_LEN + 1] = "*";
+    char allpat[NAME83_LEN + 1] = "***********"; /* 8 base + 3 ext */
 
     while ((rc = bd_find(allpat, tgt.ctx, &fi, pos_lba)) > 0)
     {

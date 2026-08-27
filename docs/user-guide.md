@@ -29,15 +29,15 @@ $ ./sysgen/build/sysgen new \
     --disk-size=2048K \
     --mem=64K \
     --platform=vemu \
-    --march=rv32im
+    --arch=riscv32
 ```
 
 | Option | Description |
 |---|---|
-| `--disk-size` | Disk size in KB. Requires a `K` suffix, e.g. `2048K` |
+| `--disk-size` | Disk size in KB. Requires a `K` suffix, e.g. `2048K`. Defaults to the maximum useful size |
 | `--mem` | RAM size in KB. Requires a `K` suffix, e.g. `64K` |
 | `--platform` | Target platform. `vemu` is included with the repository |
-| `--march` | RISC-V ISA. Defaults to `rv32i` |
+| `--arch` | Architecture (`arch/<isa>` dir). Defaults to `riscv32` |
 | `--no-extra` | Do not install optional apps from `apps/extra` |
 
 `sysgen new` always writes the image to:

@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # CP/M Neo OS build backend — driven by the sysgen tool.
 #
-#   sh sysgen/build_disk.sh --march=<MARCH> --mem=<KB> --platform=<PLATFORM>
+#   sh sysgen/build_disk.sh --arch=<ARCH> --mem=<KB> --platform=<PLATFORM>
 #
 # Builds the bootloader, kernel and CCP into sysgen/build/, next to the
 # tool binary.  Runs from anywhere: it locates the CP/M Neo root relative
@@ -11,20 +11,20 @@
 
 set -eu
 
-MARCH=""
+ARCH=""
 MEM_SIZE=""
 PLATFORM=""
 
 for arg in "$@"; do
     case "$arg" in
-        --march=*)  MARCH="${arg#--march=}" ;;
+        --arch=*)   ARCH="${arg#--arch=}" ;;
         --mem=*)    MEM_SIZE="${arg#--mem=}" ;;
         --platform=*) PLATFORM="${arg#--platform=}" ;;
         *) echo "Unknown option: $arg" >&2; exit 1 ;;
     esac
 done
 
-MARCH=${MARCH:-rv32i}
+ARCH=${ARCH:-riscv32}
 MEM_SIZE=${MEM_SIZE:?"--mem is required (e.g. --mem=64K)"}
 PLATFORM=${PLATFORM:?"--platform is required"}
 
@@ -47,21 +47,24 @@ CCP_OBJ="$BUILD/core/obj/ccp"
 SDK_OBJ="$BUILD/sdk/obj"
 SDK_LIB="$BUILD/sdk/lib"
 
-CROSS_COMPILE=${CROSS_COMPILE:-riscv64-unknown-elf-}
+# Architecture metadata (toolchain prefix + CFLAGS) from arch/$ARCH/config.sh
+# shellcheck source=/dev/null
+. "arch/$ARCH/config.sh"
+
 CC=${CROSS_COMPILE}gcc
 LD=${CROSS_COMPILE}ld
 OBJCOPY=${CROSS_COMPILE}objcopy
 OBJDUMP=${CROSS_COMPILE}objdump
 AR=${CROSS_COMPILE}ar
 
-ARCH="-march=$MARCH -mabi=ilp32"
-LIBGCC=$($CC $ARCH -print-libgcc-file-name)
+ARCH_FLAGS="$ARCH_CFLAGS"
+LIBGCC=$($CC $ARCH_FLAGS -print-libgcc-file-name)
 
-CFLAGS="$ARCH -ffreestanding -nostdlib \
-       -Os -ffunction-sections -fdata-sections \
-       -fno-builtin -fomit-frame-pointer \
-       -Wall -Wextra"
-LDFLAGS="--gc-sections --strip-debug --no-warn-rwx-segments"
+CFLAGS="$ARCH_FLAGS -ffreestanding -nostdlib \
+        -Os -ffunction-sections -fdata-sections \
+        -fno-builtin -fomit-frame-pointer \
+        -Wall -Wextra"
+LDFLAGS="--gc-sections --strip-debug --no-warn-rwx-segments -m $LD_EMULATION"
 
 PLATFORM_INC="-I platform/$PLATFORM"
 KERNEL_INC="-I core/kernel/ -I sdk/include -I core/ -I ./ $PLATFORM_INC"
@@ -79,11 +82,11 @@ mkdir -p "$BUILD" "$INT" "$SDK_LIB"
 echo "  Building bootloader..."
 $CC $CFLAGS $PLATFORM_INC -I core/kernel/ \
     -c "platform/$PLATFORM/bios.c" -o "$INT/boot_plat.o"
-$CC $CFLAGS -I core/bootloader/ -I core/kernel/ \
+$CC $CFLAGS -I arch/$ARCH/ -I core/kernel/ \
     -Wl,--gc-sections -Wl,--strip-debug \
     -Wl,--defsym=__mem_size="$MEM_HEX" \
     -T core/bootloader/linker_boot.ld \
-    core/bootloader/boot.S "$INT/boot_plat.o" -o "$INT/bootloader.elf"
+    arch/$ARCH/boot.S "$INT/boot_plat.o" -o "$INT/bootloader.elf"
 $OBJCOPY -O binary --only-section=.boot "$INT/bootloader.elf" "$BUILD/bootloader.bin"
 SIZE=$(wc -c < "$BUILD/bootloader.bin")
 if [ "$SIZE" -gt 1024 ]; then
@@ -171,4 +174,4 @@ $LD $LDFLAGS -T sdk/linker/linker_sdk.ld \
     --just-symbols="$INT/kernel.elf" -o "$INT/ccp.elf"
 $OBJCOPY -O binary "$INT/ccp.elf" "$INT/ccp.bin"
 
-printf '%s' "$MARCH" > "$BUILD/.arch"
+printf '%s' "$ARCH" > "$BUILD/.arch"

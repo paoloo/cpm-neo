@@ -1,6 +1,6 @@
 /*
  * bootloader/boot.S
- * CP/M Neo Bootloader
+ * CP/M Neo 32-bit RISV-V Bootloader
  */
 
 /* S0 (sector-0) field offsets come from core/kernel/s0_layout.h — the single

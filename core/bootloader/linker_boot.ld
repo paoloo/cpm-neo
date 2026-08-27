@@ -1,4 +1,3 @@
-OUTPUT_FORMAT("elf32-littleriscv")
 ENTRY(_boot_start)
 
 __io_size     = 0x0100;

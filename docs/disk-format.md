@@ -38,6 +38,7 @@ the free pool.
 | 0x018 | u16 | Reserved sectors | `S0_KERN_SECS` | `K + S` |
 | 0x01A | u16 | CCP start LBA | `S0_CCP_LBA` | `2 + K` |
 | 0x01C | u16 | CCP sector count | `S0_CCP_SIZE` | `S` |
+| 0x01E | u8[8] | Platform name | `S0_PLATFORM` | varies |
 | 0x1FE | u16 | Boot signature | `S0_SIG` | `0xAA55` |
 
 ## Volume map — sector 1

@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 static uint32_t min_viable_blocks(void)
 {
@@ -68,8 +69,10 @@ int elf32_symbol(const uint8_t *e, size_t n, const char *name, uint32_t *value)
 {
     if (!e || n < 52)
         return -1;
+
     if (e[0] != 0x7F || e[1] != 'E' || e[2] != 'L' || e[3] != 'F')
         return -1;
+
     if (e[4] != 1) /* ELFCLASS32 */
         return -1;
 
@@ -149,6 +152,7 @@ void to_name83(const char *src, char *out83)
     tmp[n] = '\0';
     while (n > 0 && (tmp[n - 1] == ' ' || tmp[n - 1] == '\t'))
         tmp[--n] = '\0';
+
     char base[NAME83_BASE], ext[NAME83_EXT];
     memset(base, ' ', NAME83_BASE);
     memset(ext, ' ', NAME83_EXT);
@@ -183,6 +187,7 @@ int read_file(const char *path, uint8_t **out, uint32_t *out_len)
     FILE *f = fopen(path, "rb");
     if (!f)
         return -1;
+
     fseek(f, 0, SEEK_END);
     long sz = ftell(f);
     if (sz < 0 || (unsigned long)sz > (unsigned long)UINT32_MAX)
@@ -190,6 +195,7 @@ int read_file(const char *path, uint8_t **out, uint32_t *out_len)
         fclose(f);
         return -1;
     }
+
     fseek(f, 0, SEEK_SET);
     uint8_t *buf = (uint8_t *)malloc((sz > 0) ? (size_t)sz : 1);
     if (!buf)
@@ -197,6 +203,7 @@ int read_file(const char *path, uint8_t **out, uint32_t *out_len)
         fclose(f);
         return -1;
     }
+
     size_t r = fread(buf, 1, (size_t)sz, f);
     if (r != (size_t)sz)
     {
@@ -204,6 +211,7 @@ int read_file(const char *path, uint8_t **out, uint32_t *out_len)
         fclose(f);
         return -1;
     }
+
     fclose(f);
     *out = buf;
     *out_len = (uint32_t)sz;
@@ -215,10 +223,12 @@ int write_file(const char *path, const uint8_t *data, uint32_t len)
     FILE *f = fopen(path, "wb");
     if (!f)
         return -1;
+
     size_t w = fwrite(data, 1, (size_t)len, f);
     int rc = fclose(f);
     if (w != (size_t)len)
         return -1;
+        
     return rc;
 }
 
@@ -235,9 +245,10 @@ int mkdisk_build(uint32_t size_kb,
                 const uint8_t *kern, uint32_t kern_size,
                 const uint8_t *ccp, uint32_t ccp_size,
                 uint32_t kern_load,
-                uint16_t os_ver, uint16_t kern_ver, uint16_t ccp_ver)
+                uint16_t os_ver, uint16_t kern_ver, uint16_t ccp_ver,
+                const char *platform)
 {
-    if (!kern || kern_size == 0 || size_kb == 0 || size_kb > 32767)
+    if (!kern || kern_size == 0 || size_kb == 0)
         return -1;
 
     uint32_t total_secs = size_kb * 2;
@@ -257,6 +268,7 @@ int mkdisk_build(uint32_t size_kb,
     uint8_t *disk = (uint8_t *)calloc(total_secs * DISK_SECTOR_SIZE, 1);
     if (!disk)
         return -1;
+
     sysgen_set_disk(disk, total_secs * DISK_SECTOR_SIZE);
 
     /* ── Sector 0 ─────────────────────────────────────────── */
@@ -275,6 +287,10 @@ int mkdisk_build(uint32_t size_kb,
     write16(disk + S0_KERN_SECS, (uint16_t)reserved);
     write16(disk + S0_CCP_LBA, (uint16_t)(KERN_START_LBA + num_kern_sects));
     write16(disk + S0_CCP_SIZE, (uint16_t)num_ccp_sects);
+
+    if (platform)
+        memcpy(disk + S0_PLATFORM, platform, 8);
+
     write16(disk + S0_SIG, BOOT_SIG);
 
     /* ── Kernel image (padded + BOOT_MAGIC trailer) ────────── */
@@ -372,5 +388,5 @@ int mkdisk_max_size_kb(uint32_t kern_size, uint32_t ccp_size)
 
     uint32_t cap_secs = (uint32_t)BD_VOL_MAX_BLOCKS * BD_BLOCK_SECS;
     uint32_t max_secs = (uint32_t)KERN_START_LBA + reserved + cap_secs;
-    return (int)(max_secs / 2);
+    return (int)((max_secs + 1) / 2);
 }
