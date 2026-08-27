@@ -85,7 +85,7 @@ $CC $CFLAGS $PLATFORM_INC -I core/kernel/ \
 $CC $CFLAGS -I arch/$ARCH/ -I core/kernel/ \
     -Wl,--gc-sections -Wl,--strip-debug \
     -Wl,--defsym=__mem_size="$MEM_HEX" \
-    -T core/bootloader/linker_boot.ld \
+    -T arch/$ARCH/linker_boot.ld \
     arch/$ARCH/boot.S "$INT/boot_plat.o" -o "$INT/bootloader.elf"
 $OBJCOPY -O binary --only-section=.boot "$INT/bootloader.elf" "$BUILD/bootloader.bin"
 SIZE=$(wc -c < "$BUILD/bootloader.bin")

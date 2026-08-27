@@ -2,7 +2,7 @@
 #define S0_LAYOUT_H
 
 /* Sector-0 (S0) field offsets.  This is the single source of truth shared
- * by the bootloader (core/bootloader/boot.S), the kernel, and sysgen so the
+ * by the bootloader (arch/<isa>/boot.S), the kernel, and sysgen so the
  * on-disk layout can never drift between the three consumers.  The header
  * contains only preprocessor defines so it is usable from C and from GAS
  * assembly (boot.S is preprocessed by the C compiler). */
