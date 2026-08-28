@@ -7,7 +7,8 @@ to inspect or modify an image.
 
 ## Prerequisites
 
-- RISC-V bare-metal toolchain: `riscv64-unknown-elf-*`
+- A bare-metal cross-toolchain for your target ISA (the bundled default is
+  riscv32: `riscv64-unknown-elf-*`)
 - `make`
 - `sh`
 - Standard POSIX tools

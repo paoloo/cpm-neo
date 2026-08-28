@@ -4,11 +4,9 @@ Thanks for your interest! This guide gets you from a fresh checkout to your firs
 
 ## Getting started
 
-1. **Install a RISC-V bare-metal toolchain** (`riscv64-unknown-elf-gcc`, binutils, and libgcc). On Debian/Ubuntu use the [xPack](https://xpack.github.io/riscv-none-elf-gcc/) or SiFive toolchain packages; on macOS use `brew install riscv-tools` (or a toolchain from source). Verify with:
-
-   ```sh
-   $ riscv64-unknown-elf-gcc --version
-   ```
+1. **Install a bare-metal cross-toolchain** for your target ISA. The bundled
+   architecture is `riscv32`, which uses `riscv64-unknown-elf-gcc`, binutils,
+   and libgcc.
 
 2. **Build the host `sysgen` tool** and **create a disk image**:
 

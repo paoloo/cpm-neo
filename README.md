@@ -21,7 +21,7 @@
 
 ## Quick Start
 
-CP/M Neo requires a RISC-V bare-metal toolchain (`riscv64-unknown-elf-gcc` + binutils), `make`, and `sh`.
+CP/M Neo requires a bare-metal cross-compiler toolchain for your target architecture (`arch/<isa>/config.sh` supplies the toolchain prefix and flags), `make`, and `sh`.
 
 ```sh
 make -C sysgen
