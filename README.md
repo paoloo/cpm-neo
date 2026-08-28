@@ -12,7 +12,7 @@
 [![GitHub Repo stars](https://img.shields.io/github/stars/Mazin-O3/cpm-neo?style=flat-square)](https://github.com/Mazin-O3/cpm-neo)
 [![GitHub forks](https://img.shields.io/github/forks/Mazin-O3/cpm-neo?style=flat-square)](https://github.com/Mazin-O3/cpm-neo)
 [![GitHub contributors](https://img.shields.io/github/contributors/Mazin-O3/cpm-neo?style=flat-square)](https://github.com/Mazin-O3/cpm-neo)
-[![License](https://img.shields.io/github/license/Mazin-O3/cpm-neo?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/github/license/Mazin-O3/cpm-neo?style=flat-square&color=yellow)](LICENSE)
 
 
 <img src="docs/images/cpm-neo-main.png" alt="cpm-neo main" width="100%">
