@@ -10,6 +10,7 @@
 
 extern char __kernel_base[];
 extern char __io_base[];
+extern char __tpa_base[];
 
 int      kernel_init(void);
 void     kexec_ccp(void) __attribute__((noreturn));

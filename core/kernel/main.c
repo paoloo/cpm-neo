@@ -7,7 +7,7 @@
 
 static void print_TPA(void)
 {
-    uintptr_t size = (uintptr_t)__kernel_base - TPA_LOAD_ADDR;
+    uintptr_t size = (uintptr_t)__kernel_base - (uintptr_t)__tpa_base;
     uint32_t kb = (uint32_t)(size / 1024);
 
     char buf[16];

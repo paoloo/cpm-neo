@@ -221,8 +221,6 @@ typedef struct
 
 #define VHDR_VER          0x0001u /* volume header format version */
 
-#define TPA_LOAD_ADDR 0x0100
-
 /* Environment slot indices */
 
 #define ENV_SYSCALL_PTR  0   /* Pointer to syscall table */

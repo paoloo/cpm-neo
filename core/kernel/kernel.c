@@ -19,7 +19,7 @@
 #include "string.h"
 #include "stdlib.h"
 
-#define JUMP_TPA() ((void (*)(void))(uintptr_t)TPA_LOAD_ADDR)()
+#define JUMP_TPA() ((void (*)(void))(uintptr_t)__tpa_base)()
 
 /* Per-kernel-environment slots: indexed by ENV_* constants.
  * is_ccp gates writes so transient programs cannot corrupt CCP state. */
@@ -206,7 +206,7 @@ int kexec(const char *name83, int argc, char **argv, FsContext ctx)
         return ENOEXEC;
     }
 
-    if (file_size >= (uint32_t)__kernel_base - TPA_LOAD_ADDR)
+    if (file_size >= (uint32_t)__kernel_base - (uintptr_t)__tpa_base)
     {
         bd_close(fd);
         return E2BIG;
@@ -227,7 +227,7 @@ int kexec(const char *name83, int argc, char **argv, FsContext ctx)
     for (int i = g_kstate.args.argc; i < ARGS_MAX; i++)
         g_kstate.args.argv[i][0] = '\0';
 
-    uint8_t *dest = (uint8_t *)TPA_LOAD_ADDR;
+    uint8_t *dest = (uint8_t *)__tpa_base;
     uint32_t remaining = file_size;
     while (remaining > 0)
     {
@@ -271,7 +271,7 @@ void kexec_ccp(void)
         goto err;
 
     for (uint16_t i = 0; i < nsecs; i++)
-        if (bios_read(lba + i, (void *)(TPA_LOAD_ADDR + i * DISK_SECTOR_SIZE)))
+        if (bios_read(lba + i, (void *)((uintptr_t)__tpa_base + i * DISK_SECTOR_SIZE)))
             goto err;
 
     JUMP_TPA();
@@ -576,7 +576,7 @@ int sys_info(SysInfo *out)
     memcpy(out->platform, &s0[S0_PLATFORM], 8);
     out->platform[8] = '\0';
 
-    out->tpa = ((uint32_t)__kernel_base - TPA_LOAD_ADDR) / 1024;
+    out->tpa = ((uint32_t)__kernel_base - (uintptr_t)__tpa_base) / 1024;
 
     for (int v = 0; v < VOL_MAX; v++)
         out->vol_mounted[v] = (disk_vruns((int8_t)v) > 0) ? 1 : 0;

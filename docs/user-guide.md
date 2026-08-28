@@ -29,16 +29,14 @@ Create a 2 MB Vemu image with 64 KB of RAM:
 $ ./sysgen/build/sysgen new \
     --disk-size=2048K \
     --mem=64K \
-    --platform=vemu \
-    --arch=riscv32
+    --platform=vemu
 ```
 
 | Option | Description |
 |---|---|
 | `--disk-size` | Disk size in KB. Requires a `K` suffix, e.g. `2048K`. Defaults to the maximum useful size |
 | `--mem` | RAM size in KB. Requires a `K` suffix, e.g. `64K` |
-| `--platform` | Target platform. `vemu` is included with the repository |
-| `--arch` | Architecture (`arch/<isa>` dir). Defaults to `riscv32` |
+| `--platform` | Target platform (`platform/<name>` dir). `vemu` is included with the repository; its `config.sh` selects the ISA and memory layout |
 | `--no-extra` | Do not install optional apps from `apps/extra` |
 
 `sysgen new` always writes the image to:

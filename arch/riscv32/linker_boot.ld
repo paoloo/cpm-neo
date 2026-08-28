@@ -1,8 +1,8 @@
 ENTRY(_boot_start)
 
-__io_size     = 0x0100;
-/* __mem_size supplied externally via --defsym=__mem_size=... (see Makefile) */
-__io_base     = __mem_size - __io_size;
+/* __io_base and __mem_top are supplied externally via --defsym=, derived
+ * by build_disk.sh from the platform config (__io_base = MMIO window base,
+ * __mem_top = top of usable RAM). */
 
 MEMORY {
     RAM (rx) : ORIGIN = 0x0000, LENGTH = 1024
@@ -31,5 +31,5 @@ __boot_stack_top  = __boot_scratch + 0x280;  /* 128 B stack above the scratch   
 /* The volatile boot RAM is placed by symbol arithmetic, not by a section, so
  * the linker would never complain if it ran past the end of RAM.  Enforce the
  * invariant here: it must stay below the MMIO area at the top of memory. */
-ASSERT(__boot_stack_top <= __io_base,
-       "ERROR: boot scratch/stack reach IO_AREA — image too large for this memory size")
+ASSERT(__boot_stack_top <= __mem_top,
+       "ERROR: boot scratch/stack reach top of usable RAM — image too large for this memory size")

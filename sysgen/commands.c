@@ -43,13 +43,13 @@ typedef struct
     const char *verb;
 } AddFileOpts;
 
-/* Output paths for a compiled .COM file and the architecture string. */
+/* Output paths for a compiled .COM file and the platform string. */
 typedef struct
 {
     char *out_com;
     size_t out_n;
-    char *arch;
-    size_t arch_n;
+    char *platform;
+    size_t platform_n;
 } BuildFolderOpts;
 
 /* Walk-state for recursively installing bundled apps. */
@@ -75,7 +75,6 @@ typedef struct
     long disk_size_kb;
     long mem_bytes;
     const char *platform;
-    const char *arch;
     bool no_extra;
 } CmdNewConfig;
 
@@ -237,7 +236,7 @@ static int setup_disk_target(int argc, char **argv, const char *vn_arg, ImageTar
  * System Generation & Build Logic
  * ========================================================================= */
 
-static int run_build_script(const SysgenPaths *paths, const char *arch,
+static int run_build_script(const SysgenPaths *paths,
                             long mem, const char *platform)
 {
     char script[SYSGEN_FULL_PATH_MAX];
@@ -246,23 +245,19 @@ static int run_build_script(const SysgenPaths *paths, const char *arch,
     char mem_flag[32];
     snprintf(mem_flag, sizeof(mem_flag), "--mem=%ldK", mem / 1024);
 
-    char arch_flag[64];
-    snprintf(arch_flag, sizeof(arch_flag), "--arch=%s", arch);
-
     char plat_flag[64];
     snprintf(plat_flag, sizeof(plat_flag), "--platform=%s", platform);
 
     char *argv[] = {
         (char *)"sh",
         script,
-        arch_flag,
         mem_flag,
         plat_flag,
         NULL,
     };
 
-    printf("Starting disk build for %s [Arch: %s, Mem: %ld KB]\n",
-           platform, arch, mem / 1024);
+    printf("Starting disk build for %s [Mem: %ld KB]\n",
+           platform, mem / 1024);
 
     return spawn_and_wait(argv);
 }
@@ -279,8 +274,8 @@ static int disk_size_over_cap(long size_kb, uint32_t ksz, uint32_t ccpsz)
 }
 
 static void report_build(uint32_t size_kb, uint32_t boot_size, uint32_t kern_size,
-                         uint32_t ccp_size, uint32_t kern_load, uint32_t reserved,
-                         const char *out_disk_path)
+                         uint32_t ccp_size, uint32_t kern_load, uint32_t tpa_base,
+                         uint32_t reserved, const char *out_disk_path)
 {
     const uint8_t *vmap = sysgen_disk() + (uint32_t)VMAP_LBA * DISK_SECTOR_SIZE;
     char tmp[32];
@@ -297,7 +292,7 @@ static void report_build(uint32_t size_kb, uint32_t boot_size, uint32_t kern_siz
     printf("  Kernel size      : %u B\n", kern_size);
     printf("  CCP size         : %u B\n", ccp_size);
     printf("  Kernel base      : 0x%04X\n", kern_load);
-    printf("  TPA              : %lu KB\n", (unsigned long)((kern_load - TPA_LOAD_ADDR) / 1024));
+    printf("  TPA              : %lu KB\n", (unsigned long)((kern_load - tpa_base) / 1024));
     printf("  Reserved secs    : %u (kernel + CCP)\n", reserved);
     printf("  Kernel LBA       : %u\n", read16(sysgen_disk() + S0_KERN_LBA));
 
@@ -351,7 +346,6 @@ static const char *const FLAGS_NEW[] = {
     "--disk-size",
     "--mem",
     "--platform",
-    "--arch",
     "--no-extra",
     NULL,
 };
@@ -396,7 +390,6 @@ static bool parse_cmd_new_args(int argc, char **argv, CmdNewConfig *cfg)
     const char *disk_size_str = get_str_flag(argc, argv, "--disk-size");
     const char *mem_str = get_str_flag(argc, argv, "--mem");
     const char *platform_str = get_str_flag(argc, argv, "--platform");
-    const char *arch_str = get_str_flag(argc, argv, "--arch");
 
     cfg->no_extra = get_bool_flag(argc, argv, "--no-extra");
 
@@ -415,7 +408,6 @@ static bool parse_cmd_new_args(int argc, char **argv, CmdNewConfig *cfg)
     }
 
     cfg->platform = platform_str;
-    cfg->arch = arch_str ? arch_str : "riscv32";
 
     if (disk_size_str)
     {
@@ -444,7 +436,7 @@ static bool parse_cmd_new_args(int argc, char **argv, CmdNewConfig *cfg)
     return true;
 }
 
-static bool validate_build_env(const SysgenPaths *paths, const char *platform, const char *arch)
+static bool validate_build_env(const SysgenPaths *paths, const char *platform)
 {
     char path_buf[SYSGEN_FULL_PATH_MAX];
 
@@ -455,17 +447,10 @@ static bool validate_build_env(const SysgenPaths *paths, const char *platform, c
         return false;
     }
 
-    snprintf(path_buf, sizeof(path_buf), "%s/platform/%s", paths->root_dir, platform);
-    if (!dir_exists(path_buf))
+    snprintf(path_buf, sizeof(path_buf), "%s/platform/%s/config.sh", paths->root_dir, platform);
+    if (!file_exists(path_buf))
     {
-        err("platform '%s' not found under %s/platform/", platform, paths->root_dir);
-        return false;
-    }
-
-    snprintf(path_buf, sizeof(path_buf), "%s/arch/%s", paths->root_dir, arch);
-    if (!dir_exists(path_buf))
-    {
-        err("arch '%s' not found under %s/arch/", arch, paths->root_dir);
+        err("platform '%s' not found (missing %s)", platform, path_buf);
         return false;
     }
 
@@ -488,7 +473,7 @@ int cmd_new(int argc, char **argv)
         return 1;
 
     const SysgenPaths *paths = sysgen_paths();
-    if (!validate_build_env(paths, cfg.platform, cfg.arch))
+    if (!validate_build_env(paths, cfg.platform))
         return 1;
 
     char path_buf[SYSGEN_FULL_PATH_MAX];
@@ -502,13 +487,13 @@ int cmd_new(int argc, char **argv)
         disk_size_over_cap(cfg.disk_size_kb, pk, pc) != 0)
         return 1;
 
-    if (run_build_script(paths, cfg.arch, cfg.mem_bytes, cfg.platform) != 0)
+    if (run_build_script(paths, cfg.mem_bytes, cfg.platform) != 0)
         return 1;
 
     int ret = 1;
     uint8_t *kern = NULL, *elf = NULL, *ccp = NULL;
     uint32_t ksz = 0, esz = 0, ccpsz = 0, bsz = 0;
-    uint32_t kern_load = 0;
+    uint32_t kern_load = 0, tpa_base = 0;
 
     snprintf(path_buf, sizeof(path_buf), "%s/bootloader.bin", paths->build_dir);
     bsz = get_file_size(path_buf);
@@ -535,6 +520,11 @@ int cmd_new(int argc, char **argv)
     if (elf32_symbol(elf, esz, "__kernel_base", &kern_load) != 0)
     {
         err("cannot find __kernel_base");
+        goto cleanup;
+    }
+    if (elf32_symbol(elf, esz, "__tpa_base", &tpa_base) != 0)
+    {
+        err("cannot find __tpa_base");
         goto cleanup;
     }
     free(elf);
@@ -605,7 +595,7 @@ int cmd_new(int argc, char **argv)
         goto cleanup;
 
     report_build((uint32_t)cfg.disk_size_kb, bsz, ksz, ccpsz, kern_load,
-                 (uint32_t)reserved, out_disk_path);
+                 tpa_base, (uint32_t)reserved, out_disk_path);
     ret = 0;
 
 cleanup:
@@ -618,24 +608,24 @@ cleanup:
 static int build_folder_com(const SysgenPaths *paths, const char *src,
                             const BuildFolderOpts *opts)
 {
-    char arch_path[SYSGEN_FULL_PATH_MAX];
-    snprintf(arch_path, sizeof(arch_path), "%s/.arch", paths->build_dir);
+    char platform_path[SYSGEN_FULL_PATH_MAX];
+    snprintf(platform_path, sizeof(platform_path), "%s/.platform", paths->build_dir);
 
-    FILE *f = fopen(arch_path, "r");
+    FILE *f = fopen(platform_path, "r");
     if (!f)
     {
         err("no system build found in '%s' -- run 'sysgen new' first", paths->build_dir);
         return 1;
     }
 
-    if (fgets(opts->arch, opts->arch_n, f) == NULL)
-        opts->arch[0] = '\0';
+    if (fgets(opts->platform, opts->platform_n, f) == NULL)
+        opts->platform[0] = '\0';
     fclose(f);
 
-    opts->arch[strcspn(opts->arch, "\r\n")] = '\0';
-    if (!*opts->arch)
+    opts->platform[strcspn(opts->platform, "\r\n")] = '\0';
+    if (!*opts->platform)
     {
-        err("missing architecture record '%s' -- re-run 'sysgen new'", arch_path);
+        err("missing platform record '%s' -- re-run 'sysgen new'", platform_path);
         return 1;
     }
 
@@ -684,7 +674,7 @@ static int build_folder_com(const SysgenPaths *paths, const char *src,
     char *argv_run[] = {
         (char *)"sh",
         script,
-        opts->arch,
+        opts->platform,
         dirbuf,
         (char *)"-o",
         opts->out_com,
@@ -699,8 +689,8 @@ static int build_folder_com(const SysgenPaths *paths, const char *src,
 static int build_and_add(BundledScan *scan, const char *src)
 {
     char out_com[SYSGEN_FULL_PATH_MAX + 256];
-    char arch_buf[64];
-    BuildFolderOpts bfo = {out_com, sizeof(out_com), arch_buf, sizeof(arch_buf)};
+    char platform_buf[64];
+    BuildFolderOpts bfo = {out_com, sizeof(out_com), platform_buf, sizeof(platform_buf)};
 
     if (build_folder_com(scan->paths, src, &bfo) != 0)
     {
@@ -1034,8 +1024,8 @@ int cmd_install(int argc, char **argv)
     }
 
     char out_com[SYSGEN_PATH_MAX + 256];
-    char arch[64];
-    BuildFolderOpts bfo = {out_com, sizeof(out_com), arch, sizeof(arch)};
+    char platform[64];
+    BuildFolderOpts bfo = {out_com, sizeof(out_com), platform, sizeof(platform)};
 
     if (build_folder_com(sysgen_paths(), src, &bfo) != 0)
         return 1;

@@ -46,15 +46,26 @@ $ ./sysgen/build/sysgen add hello.txt --dst=A0 --attr=RW
 | `uint32_t bios_time(void)` | platform-defined time service |
 
 A program that needs to touch hardware directly can use the SDK's `sys_dev()`
-helper, which reads/writes a 32-bit memory-mapped I/O register in
-the window at `__io_base`. The register and command offsets are encoded with the
-`IOCTL_*` macros in `kernel_abi.h`; the in/out `data` pointer carries the value
-being written or read (it is required, and may not be `NULL`).
+helper, which reads/writes a 32-bit memory-mapped I/O register in the window
+at `__io_base` (the platform's MMIO base from `platform/<name>/config.sh`).
+The register and command offsets are encoded with the `IOCTL_*` macros in
+`kernel_abi.h`; the in/out `data` pointer carries the value being written or
+read (it is required, and may not be `NULL`).
 
 ## Adding a platform
 
-1. Create `platform/<name>/bios.c` implementing the functions in `bios.h`.
-2. Build with `sysgen new ... --platform=<name> --arch=<isa>`.
+A platform is a self-contained `platform/<name>/` directory:
+
+1. `config.sh` declares the three platform facts:
+   - `ARCH` — the ISA directory under `arch/` (selects the toolchain)
+   - `IO_BASE` — base address of the peripheral MMIO window
+   - `RAM_BASE` — base address of the RAM region holding CP/M Neo
+2. `bios.c` implements the functions in `bios.h`.
+3. Build with `sysgen new ... --platform=<name>`.
+
+Everything else (TPA base, kernel placement) is derived from these three
+values during the build, so a new board needs no changes to the kernel,
+linker scripts, or build logic.
 
 See [Architecture](architecture.md) for the boot and build flow.
 
@@ -63,13 +74,14 @@ See [Architecture](architecture.md) for the boot and build flow.
 An architecture is a self-contained `arch/<isa>/` directory. The build scripts
 source `arch/<isa>/config.sh` automatically.
 
-The `arch/<isa>/` directory needs three files:
+The `arch/<isa>/` directory needs four files:
 
 | File | Purpose |
 | --- | --- |
 | `config.sh` | Toolchain metadata for this ISA |
 | `boot.S` | Architecture bootloader (loads the kernel and jumps to it) |
 | `linker_boot.ld` | Bootloader memory layout (first 1 KB of RAM) |
+| `crt0.S` | C runtime startup (kernel, CCP, and apps): sets the stack pointer, clears `.bss`, and jumps to `_start` |
 
 ### `config.sh` contract
 

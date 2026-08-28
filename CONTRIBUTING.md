@@ -12,7 +12,7 @@ Thanks for your interest! This guide gets you from a fresh checkout to your firs
 
    ```sh
    $ make -C sysgen
-   $ ./sysgen/build/sysgen new --disk-size=2048K --mem=64K --platform=vemu --arch=riscv32
+   $ ./sysgen/build/sysgen new --disk-size=2048K --mem=64K --platform=vemu
    ```
 
    This produces `sysgen/build/disk.img`, a bootable CP/M Neo disk.
@@ -26,7 +26,7 @@ Thanks for your interest! This guide gets you from a fresh checkout to your firs
 | `sdk/` | User-space SDK: headers, libc, linker script |
 | `sysgen/` | Host tool that builds the OS and disk images |
 | `arch/<isa>/` | Architecture support: `config.sh`, `boot.S`, boot linker |
-| `platform/<name>/` | Platform BIOS implementations (hardware abstraction) |
+| `platform/<name>/` | Platform support: `config.sh` (ISA + memory layout) and `bios.c` |
 | `apps/` | Bundled applications |
 | `docs/` | Project documentation |
 

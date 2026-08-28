@@ -1,11 +1,13 @@
 ENTRY(_entry)
 
-/* __KERN_START and __mem_size supplied via --defsym= in the two-pass build */
-__io_size      = 0x0100;
-__io_base      = __mem_size - __io_size;
+/* __KERN_START, __io_base, __mem_top and __tpa_base are supplied via
+ * --defsym= in the two-pass build.  They are derived by build_disk.sh from
+ * the platform config: __io_base is the MMIO window base, __mem_top is the
+ * top of usable RAM (min(RAM_BASE + size, IO_BASE)) and __tpa_base is the
+ * CP/M TPA load address (RAM_BASE + 0x100). */
 
 MEMORY {
-    KRAM    (rwx) : ORIGIN = __KERN_START, LENGTH = __io_base - __KERN_START
+    KRAM    (rwx) : ORIGIN = __KERN_START, LENGTH = __mem_top - __KERN_START
 }
 
 __kernel_base = ORIGIN(KRAM);
@@ -56,6 +58,6 @@ SECTIONS {
      * down into the then-empty TPA). */
     _stack_top = ORIGIN(KRAM);
 
-    ASSERT(_kend <= __io_base, "ERROR: kernel image reaches IO_AREA")
+    ASSERT(_kend <= __mem_top, "ERROR: kernel image reaches top of usable RAM")
     /DISCARD/ : { *(.comment) *(.eh_frame) *(.note*) }
 }

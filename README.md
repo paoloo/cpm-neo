@@ -25,7 +25,7 @@ CP/M Neo requires a bare-metal cross-compiler toolchain for your target architec
 
 ```sh
 make -C sysgen
-./sysgen/build/sysgen new --disk-size=2048K --mem=64K --platform=vemu --arch=riscv32
+./sysgen/build/sysgen new --disk-size=2048K --mem=64K --platform=vemu
 ```
 
 Everything outputs directly to `sysgen/build/`:
@@ -54,7 +54,7 @@ See the [User Guide](docs/user-guide.md) for the full build and execution walkth
 
 | Command | Description |
 | --- | --- |
-| `new --disk-size=KBK --mem=KBK --platform=NAME --arch=ISA` | Build the OS and create a disk image (the disk is divided into 1 KB blocks; `--disk-size` is capped at the useful maximum: 2 MB) |
+| `new --disk-size=KBK --mem=KBK --platform=NAME` | Build the OS and create a disk image (the disk is divided into 1 KB blocks; `--disk-size` is capped at the useful maximum: 2 MB). The target's ISA comes from `platform/NAME/config.sh` |
 | `add <file> [--dst=Vn] [--attr=R/W\|R/O\|SYS]` | Add an external file to an image |
 | `install <folder> [--dst=Vn] [--attr=...]` | Compile a source folder and install the binaries |
 | `dir [Vn]` | List files on a volume |

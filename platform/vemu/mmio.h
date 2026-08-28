@@ -53,9 +53,8 @@
 /* Peripheral base addresses */
 
 /*
- * The I/O window occupies the last 0x100 bytes of system RAM.  The
- * window base is exported by the linker scripts (__io_base =
- * __mem_size - __io_size), so it follows __mem_size automatically.
+ * The I/O window base is exported by the linker as __io_base, supplied via
+ * --defsym from the platform config (platform/<name>/config.sh, IO_BASE).
  * Every translation unit that includes mmio.h must be linked with a
  * definition of __io_base (kernel: linker_kernel.ld, bootloader:
  * linker_boot.ld).
