@@ -297,7 +297,11 @@ static void report_build(uint32_t size_kb, uint32_t boot_size, uint32_t kern_siz
     printf("  Kernel size      : %u B\n", kern_size);
     printf("  CCP size         : %u B\n", ccp_size);
     printf("  Kernel base      : 0x%04X\n", kern_load);
-    printf("  TPA              : %lu KB\n", (unsigned long)((kern_load - TPA_LOAD_ADDR) / 1024));
+    /* TPA size as seen from the kernel's load address.  Platforms that map
+     * CP/M RAM at a physical base (e.g. pico2 at 0x20000000) use 32-bit
+     * load addresses, so the offset within the RAM window is what counts. */
+    uint32_t tpa_off = (kern_load - TPA_LOAD_ADDR) & 0xFFFFFFu;
+    printf("  TPA              : %lu KB\n", (unsigned long)(tpa_off / 1024));
     printf("  Reserved secs    : %u (kernel + CCP)\n", reserved);
     printf("  Kernel LBA       : %u\n", read16(sysgen_disk() + S0_KERN_LBA));
 

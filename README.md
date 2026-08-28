@@ -55,7 +55,12 @@ See the [User Guide](docs/user-guide.md) for the full build and execution walkth
 | `ren <old> <new> [Vn]` | Rename a file |
 | `stat` | Show volume usage and metadata |
 
-Platforms are defined in `platform/<name>/bios.c`.
+Platforms are defined in `platform/<name>/bios.c`. Included platforms:
+
+| Platform | Target | Notes |
+| --- | --- | --- |
+| `vemu` | [vemu](https://mazin-o3.github.io/vemu/) web emulator | default, RAM at address 0 |
+| `pico2` | Raspberry Pi Pico 2 (RP2350, RISC-V cores) | UART console, disk in flash — see [platform/pico2](platform/pico2/README.md) |
 
 See the [Developer Guide](docs/developer-guide.md) to add your own.
 

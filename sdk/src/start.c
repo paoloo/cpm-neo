@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-extern int main();
+extern int main(int argc, char **argv);
 
 void __attribute__((used, noinline)) _start(void)
 {

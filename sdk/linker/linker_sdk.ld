@@ -1,13 +1,17 @@
 ENTRY(_entry)
 
 /* Configuration Symbols */
+/* __tpa_base: physical TPA origin.  Platforms with CP/M RAM off address 0
+ * pass --defsym=__tpa_base=... (see platform/<name>/platform_flags.sh);
+ * the default keeps the classic flat layout. */
+__tpa_base       = DEFINED(__tpa_base) ? __tpa_base : 0x0100;
 __tpa_stack_size = 0x1000;
 __tpa_stack_top  = __kernel_base;
 
 MEMORY {
-    /* Length = available TPA RAM (from 0x0100 up to the kernel,
+    /* Length = available TPA RAM (from __tpa_base up to the kernel,
      * __kernel_base from kernel.elf via --just-symbols) */
-    RAM (rwx) : ORIGIN = 0x0100, LENGTH = __kernel_base - 0x0100
+    RAM (rwx) : ORIGIN = __tpa_base, LENGTH = __kernel_base - __tpa_base
 }
 
 SECTIONS {

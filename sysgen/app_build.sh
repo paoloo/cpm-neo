@@ -57,6 +57,16 @@ SDK_LIB="$BUILD/sdk/lib"
 # shellcheck source=/dev/null
 . "arch/$ARCH/config.sh"
 
+# Platform metadata persisted by build_disk.sh during 'sysgen new'
+PLATFORM=""
+[ -f "$BUILD/.platform" ] && PLATFORM=$(cat "$BUILD/.platform")
+PLATFORM_CFLAGS=""
+PLATFORM_LDSYMS=""
+if [ -n "$PLATFORM" ] && [ -f "platform/$PLATFORM/platform_flags.sh" ]; then
+    # shellcheck source=/dev/null
+    . "platform/$PLATFORM/platform_flags.sh"
+fi
+
 CC=${CROSS_COMPILE}gcc
 LD=${CROSS_COMPILE}ld
 OBJCOPY=${CROSS_COMPILE}objcopy
@@ -64,7 +74,7 @@ OBJCOPY=${CROSS_COMPILE}objcopy
 ARCH_FLAGS="$ARCH_CFLAGS"
 LIBGCC=$($CC $ARCH_FLAGS -print-libgcc-file-name)
 
-CFLAGS="$ARCH_FLAGS -ffreestanding -nostdlib \
+    CFLAGS="$ARCH_FLAGS $PLATFORM_CFLAGS -ffreestanding -nostdlib \
         -Os -ffunction-sections -fdata-sections \
         -fno-builtin -fomit-frame-pointer \
         -Wall -Wextra"
@@ -128,7 +138,7 @@ if [ -z "$objs" ]; then
     exit 1
 fi
 
-$LD $LDFLAGS -T sdk/linker/linker_sdk.ld \
+$LD $LDFLAGS $PLATFORM_LDSYMS -T sdk/linker/linker_sdk.ld \
     $objs "$SDK_OBJ/entry.o" "$SDK_LIB/libc.a" "$LIBGCC" \
     --just-symbols="$INT/kernel.elf" -o "$APP_OBJ/$APP_NAME.elf"
 $OBJCOPY -O binary "$APP_OBJ/$APP_NAME.elf" "$OUT"

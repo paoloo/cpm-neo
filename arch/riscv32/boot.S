@@ -19,6 +19,7 @@
 .equ CH_0,   0x30
 .equ CH_DOT, 0x2E
 
+.extern bios_init
 .extern bios_read
 .extern bios_conout
 
@@ -32,6 +33,10 @@ _boot_start:
      * stack just above it (__boot_stack_top), both from linker_boot.ld. */
     la   sp, __boot_stack_top
     la   s7, __boot_scratch
+
+    /* Platform hardware bring-up (console, clocks, timer).  A no-op or
+     * cheap on platforms whose MMIO works out of reset (e.g. vemu). */
+    call bios_init
 
     /* Load sector 0 → scratch buffer */
     li   a0, 0

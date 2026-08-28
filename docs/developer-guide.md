@@ -56,4 +56,31 @@ being written or read (it is required, and may not be `NULL`).
 1. Create `platform/<name>/bios.c` implementing the functions in `bios.h`.
 2. Build with `sysgen new ... --platform=<name> --arch=<isa>`.
 
+Optional platform hooks (all picked up automatically by the build scripts):
+
+| File | Role |
+|------|------|
+| `platform/<name>/bios.c` | Required — the BIOS implementation |
+| `platform/<name>/platform_flags.sh` | Sourced by the build: may set `PLATFORM_CFLAGS` (extra compiler flags) and `PLATFORM_LDSYMS` (extra linker `--defsym`s) |
+| `platform/<name>/linker_boot.ld` | Overrides `arch/<isa>/linker_boot.ld` for the bootloader link |
+| `platform/<name>/boot_extra.S` | Extra object linked into the bootloader (placed in its own `.image_def` section in the boot binary) |
+
+Platforms whose CP/M RAM is not mapped at physical address 0 (e.g. the Pico
+2's SRAM at `0x20000000`) should set in `platform_flags.sh`:
+
+```sh
+PLATFORM_CFLAGS="-DTPA_LOAD_ADDR=<ram_base>+0x100"
+PLATFORM_LDSYMS="--defsym=__ram_base=<ram_base> --defsym=__tpa_base=<ram_base>+0x100"
+```
+
+The kernel is then linked at physical addresses, and the bootloader needs no
+address translation: `S0_KERN_LOAD` already carries the physical load address.
+
+The platform name is persisted to `sysgen/build/.platform` by
+`build_disk.sh`, so `app_build.sh` (`sysgen install`) applies the same flags
+to user applications.
+
+See [platform/pico2](../platform/pico2/README.md) for a complete hardware
+platform example.
+
 See the [User Guide](user-guide.md) for the `sysgen` command reference.

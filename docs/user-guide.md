@@ -36,7 +36,7 @@ $ ./sysgen/build/sysgen new \
 |---|---|
 | `--disk-size` | Disk size in KB. Requires a `K` suffix, e.g. `2048K`. Defaults to the maximum useful size |
 | `--mem` | RAM size in KB. Requires a `K` suffix, e.g. `64K` |
-| `--platform` | Target platform. `vemu` is included with the repository |
+| `--platform` | Target platform. `vemu` (emulator) and `pico2` (Raspberry Pi Pico 2) are included with the repository |
 | `--arch` | Architecture (`arch/<isa>` dir). Defaults to `riscv32` |
 | `--no-extra` | Do not install optional apps from `apps/extra` |
 
@@ -47,6 +47,17 @@ $ sysgen/build/disk.img
 ```
 
 The image contains four formatted volumes, A:–D:. The maximum useful disk size is the size of a single volume.
+
+### Building for the Raspberry Pi Pico 2
+
+The `pico2` platform runs CP/M Neo natively on the Pico 2's RISC-V cores and
+stores the disk in its flash. See [platform/pico2/README.md](../platform/pico2/README.md)
+for the full walkthrough:
+
+```sh
+$ ./sysgen/build/sysgen new --disk-size=2048K --mem=256K --platform=pico2 --arch=riscv32
+$ python3 platform/pico2/mkuf2.py      # → sysgen/build/pico2/cpmx-pico2.uf2
+```
 
 ## Inspect an image
 

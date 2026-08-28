@@ -60,7 +60,35 @@ AR=${CROSS_COMPILE}ar
 ARCH_FLAGS="$ARCH_CFLAGS"
 LIBGCC=$($CC $ARCH_FLAGS -print-libgcc-file-name)
 
-CFLAGS="$ARCH_FLAGS -ffreestanding -nostdlib \
+# ── Platform build hooks (all optional) ────────────────────────────────────
+#   platform/<name>/platform_flags.sh — PLATFORM_CFLAGS / PLATFORM_LDSYMS
+#   platform/<name>/linker_boot.ld    — overrides arch/$ARCH/linker_boot.ld
+#   platform/<name>/boot_extra.S      — extra objects linked into the bootloader
+PLATFORM_CFLAGS=""
+PLATFORM_LDSYMS=""
+if [ -f "platform/$PLATFORM/platform_flags.sh" ]; then
+    # shellcheck source=/dev/null
+    . "platform/$PLATFORM/platform_flags.sh"
+fi
+
+BOOT_LINKER="arch/$ARCH/linker_boot.ld"
+if [ -f "platform/$PLATFORM/linker_boot.ld" ]; then
+    BOOT_LINKER="platform/$PLATFORM/linker_boot.ld"
+fi
+
+BOOT_EXTRA=""
+if [ -f "platform/$PLATFORM/boot_extra.S" ]; then
+    BOOT_EXTRA="platform/$PLATFORM/boot_extra.S"
+fi
+
+# Bootloader size budget: platforms that boot from their own flash ROM (e.g.
+# pico2) reserve a large boot slot; default stays the classic 1 KB.
+case "$PLATFORM" in
+    pico2) BOOT_MAX=16384 ;;
+    *)     BOOT_MAX=1024 ;;
+esac
+
+CFLAGS="$ARCH_FLAGS $PLATFORM_CFLAGS -ffreestanding -nostdlib \
         -Os -ffunction-sections -fdata-sections \
         -fno-builtin -fomit-frame-pointer \
         -Wall -Wextra"
@@ -82,15 +110,17 @@ mkdir -p "$BUILD" "$INT" "$SDK_LIB"
 echo "  Building bootloader..."
 $CC $CFLAGS $PLATFORM_INC -I core/kernel/ \
     -c "platform/$PLATFORM/bios.c" -o "$INT/boot_plat.o"
+BOOT_ONLY_SECT="--only-section=.boot"
+[ -n "$BOOT_EXTRA" ] && BOOT_ONLY_SECT="$BOOT_ONLY_SECT --only-section=.image_def"
 $CC $CFLAGS -I arch/$ARCH/ -I core/kernel/ \
     -Wl,--gc-sections -Wl,--strip-debug \
     -Wl,--defsym=__mem_size="$MEM_HEX" \
-    -T arch/$ARCH/linker_boot.ld \
-    arch/$ARCH/boot.S "$INT/boot_plat.o" -o "$INT/bootloader.elf"
-$OBJCOPY -O binary --only-section=.boot "$INT/bootloader.elf" "$BUILD/bootloader.bin"
+    -T "$BOOT_LINKER" \
+    arch/$ARCH/boot.S $BOOT_EXTRA "$INT/boot_plat.o" -o "$INT/bootloader.elf"
+$OBJCOPY -O binary $BOOT_ONLY_SECT "$INT/bootloader.elf" "$BUILD/bootloader.bin"
 SIZE=$(wc -c < "$BUILD/bootloader.bin")
-if [ "$SIZE" -gt 1024 ]; then
-    echo "ERROR: bootloader.bin $SIZE bytes > 1024" >&2
+if [ "$SIZE" -gt "$BOOT_MAX" ]; then
+    echo "ERROR: bootloader.bin $SIZE bytes > $BOOT_MAX" >&2
     exit 1
 fi
 
@@ -116,6 +146,7 @@ done
 $LD $LDFLAGS \
     --defsym=__KERN_START=0x4000 \
     --defsym=__mem_size="$MEM_HEX" \
+    $PLATFORM_LDSYMS \
     -T core/kernel/linker_kernel.ld \
     $KERNEL_OBJS "$LIBGCC" -o "$INT/kernel_pass1.elf"
 
@@ -131,6 +162,7 @@ KERN_START_HEX=0x$(printf '%x' "$KERN_START")
 $LD $LDFLAGS \
     --defsym=__KERN_START="$KERN_START_HEX" \
     --defsym=__mem_size="$MEM_HEX" \
+    $PLATFORM_LDSYMS \
     -T core/kernel/linker_kernel.ld \
     $KERNEL_OBJS "$LIBGCC" -o "$INT/kernel.elf"
 
@@ -169,9 +201,10 @@ for src in $CCP_C; do
     compile "$CFLAGS $CCP_INC" "$src" "$obj"
     CCP_OBJS="$CCP_OBJS $obj"
 done
-$LD $LDFLAGS -T sdk/linker/linker_sdk.ld \
+$LD $LDFLAGS $PLATFORM_LDSYMS -T sdk/linker/linker_sdk.ld \
     $CCP_OBJS "$SDK_OBJ/entry.o" "$LIBGCC" \
     --just-symbols="$INT/kernel.elf" -o "$INT/ccp.elf"
 $OBJCOPY -O binary "$INT/ccp.elf" "$INT/ccp.bin"
 
 printf '%s' "$ARCH" > "$BUILD/.arch"
+printf '%s' "$PLATFORM" > "$BUILD/.platform"

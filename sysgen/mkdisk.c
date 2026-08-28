@@ -289,7 +289,15 @@ int mkdisk_build(uint32_t size_kb,
     write16(disk + S0_CCP_SIZE, (uint16_t)num_ccp_sects);
 
     if (platform)
-        memcpy(disk + S0_PLATFORM, platform, 8);
+    {
+        /* NUL-padded 8-byte field; copy at most 7 chars so the name is
+         * always terminated even for 8+ character platform names. */
+        size_t plen = strlen(platform);
+        if (plen > 7)
+            plen = 7;
+        memcpy(disk + S0_PLATFORM, platform, plen);
+        memset(disk + S0_PLATFORM + plen, 0, 8 - plen);
+    }
 
     write16(disk + S0_SIG, BOOT_SIG);
 

@@ -1,8 +1,13 @@
 ENTRY(_entry)
 
-/* __KERN_START and __mem_size supplied via --defsym= in the two-pass build */
+/* __KERN_START and __mem_size supplied via --defsym= in the two-pass build.
+ * __KERN_START is the physical load address of the kernel; for platforms
+ * whose CP/M RAM is not mapped at physical 0, build_disk.sh passes
+ * --defsym=__ram_base=<phys base> and computes __KERN_START from the
+ * physical io_base.  Default __ram_base=0 preserves the flat model. */
+__ram_base     = DEFINED(__ram_base) ? __ram_base : 0;
 __io_size      = 0x0100;
-__io_base      = __mem_size - __io_size;
+__io_base      = __ram_base + __mem_size - __io_size;
 
 MEMORY {
     KRAM    (rwx) : ORIGIN = __KERN_START, LENGTH = __io_base - __KERN_START
