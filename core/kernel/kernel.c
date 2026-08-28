@@ -173,9 +173,6 @@ static int make_name83(const char *src, char *out)
  */
 int kernel_init(void)
 {
-    if (bios_init() != 0)
-        return EIO;
-
     if (disk_init() != 0)
         return EIO;
 

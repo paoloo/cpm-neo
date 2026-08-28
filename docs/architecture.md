@@ -15,7 +15,9 @@ This page describes how CP/M Neo is laid out in memory, how it boots, and how it
 
 <img src="images/boot-process.png" alt="boot process" width="100%">
 
-1. The bootloader reads sector 0 into a scratch buffer and verifies the `0xAA55` boot signature.
+1. The bootloader calls `bios_init()` to initialize platform hardware, then
+   reads sector 0 into a scratch buffer and verifies the `0xAA55` boot
+   signature.
 2. Reads the kernel load address and size from the sector-0 header (offsets in `core/kernel/s0_layout.h`).
 3. It loads the kernel sectors into RAM and verifies the kernel magic, then
    jumps to the kernel entry point.
@@ -24,7 +26,6 @@ This page describes how CP/M Neo is laid out in memory, how it boots, and how it
 
 `os_entry()` (core/kernel/main.c) runs `kernel_init()`:
 
-- `bios_init()`: platform hardware setup.
 - `disk_init()`: reads the volume map (VMAP) from sector 1.
 - Publishes the syscall table address into environment slot 0.
 - Binds the mounted volumes (A:–D:); the first mount becomes the default drive.

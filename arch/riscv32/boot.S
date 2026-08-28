@@ -19,6 +19,7 @@
 .equ CH_0,   0x30
 .equ CH_DOT, 0x2E
 
+.extern bios_init
 .extern bios_read
 .extern bios_conout
 
@@ -32,6 +33,10 @@ _boot_start:
      * stack just above it (__boot_stack_top), both from linker_boot.ld. */
     la   sp, __boot_stack_top
     la   s7, __boot_scratch
+
+    /* Initialize hardware (BIOS) — required to read the kernel into RAM */
+    jal  ra, bios_init
+    bltz a0, err_bios
 
     /* Load sector 0 → scratch buffer */
     li   a0, 0
@@ -147,6 +152,10 @@ err_kernel:
     j    .Lhalt
 err_disk:
     la   t0, msg_err_disk
+    j    .Lhalt
+err_bios:
+    la   t0, msg_err_bios
+    j    .Lhalt
 .Lhalt:
     jal  ra, print_str
 .Lspin:
@@ -160,6 +169,7 @@ msg_art_3:      .asciz " | |   | |_) / /| |\\/| | |  \\| |  _|| | | |\n"
 msg_art_4:      .asciz " | |___|  __/ / | |  | | | |\\  | |__| |_| |\n"
 msg_art_5:      .asciz "  \\____|_| /_/  |_|  |_| |_| \\_|_____\\___/ \n"
 msg_err_disk:   .asciz "  \nDISK ERR\n"
+msg_err_bios:   .asciz "  \nBIOS ERR\n"
 msg_err_kernel: .asciz "  \nKERNEL ERR\n"
 
 .hword 0xAA55
