@@ -6,6 +6,8 @@ CP/M Neo provides an enhanced Console Command Processor (CCP). The resident
 commands are `DIR`, `DIRS`, `ERA`, `REN`, `TYPE`, `USER`, `ECHO`, and `CLS`.
 Other commands are transient `.COM` programs installed by `sysgen`.
 
+The CCP implementation lives in `core/ccp/`.
+
 ## Prompt and navigation
 
 | Action | Example |
@@ -50,7 +52,7 @@ Consequences worth remembering:
 
 - `*.*` matches **all** files (a `?` also matches blank padding).
 - A bare `*`, `*.`, or `X*` leaves the type blank, so it matches only
-  files **without an extension** — on disks where every file has a type
+  files **without an extension**. On disks where every file has a type
   these list nothing.
 - `D*S` means `D???????`: everything after `*` in the same field is
   discarded.
@@ -64,16 +66,16 @@ Consequences worth remembering:
 | `DIR *` | MAKEFILE only | blank type matches blank type |
 | `DIR *.` | MAKEFILE only | same as bare `*` |
 | `DIR D*` | nothing here | D-names without a type don't exist |
-| `DIR L*O.DAT` | — | `*` ends the field: reads as `L???????.DAT` |
+| `DIR L*O.DAT` | - | `*` ends the field: reads as `L???????.DAT` |
 | `ERA *.TXT` | erases DATA1.TXT | wildcards work in ERA |
 | `STAT ?ATA1.TXT` | DATA1.TXT | `?` fills single positions |
 
 The classic CP/M habit follows from the table: to act on a whole disk,
-type `*.*` — never a bare `*`.
+type `*.*`, never a bare `*`.
 
 ## Commands
 
-### DIR — List directory entries
+### DIR: List directory entries
 
 ```text
 DIR [v[u]:][filespec]
@@ -87,7 +89,7 @@ A> DIR *.COM
 A> DIR B5:
 ```
 
-### DIRS — List system files
+### DIRS: List system files
 
 ```text
 DIRS [v[u]:][filespec]
@@ -101,7 +103,7 @@ A> DIRS
 A> DIRS B0:*.COM
 ```
 
-### ERA — Delete files
+### ERA: Delete files
 
 ```text
 ERA [v[u]:]filespec
@@ -114,7 +116,7 @@ A> ERA OLD.BAK
 A> ERA B:*.TMP
 ```
 
-### REN — Rename files
+### REN: Rename files
 
 ```text
 REN [v[u]:]old [v[u]:]new
@@ -127,7 +129,7 @@ the same volume and user area.
 A> REN OLD.TXT NEW.TXT
 ```
 
-### TYPE — Display file contents
+### TYPE: Display file contents
 
 ```text
 TYPE [v[u]:]filespec
@@ -139,7 +141,7 @@ Displays file contents as text.
 A> TYPE HELLO.TXT
 ```
 
-### DUMP — Display a hex dump
+### DUMP: Display a hex dump
 
 ```text
 DUMP [v[u]:]filespec
@@ -151,7 +153,7 @@ Displays a formatted hex dump with offsets, hexadecimal bytes, and text.
 A> DUMP BOOT.BIN
 ```
 
-### COPY — Copy files
+### COPY: Copy files
 
 ```text
 COPY [v[u]:]src [v[u]:][name]
@@ -166,7 +168,7 @@ A> COPY A:*.TXT B:
 A> COPY B5:FILE.TXT D7:HI.TXT
 ```
 
-### SUBMIT — Run a batch file
+### SUBMIT: Run a batch file
 
 ```text
 SUBMIT filename.sub [$1..$9]
@@ -182,7 +184,7 @@ Press ESC between commands to abort the batch. Missing source files
 report `No SUB file found`; failures while building the batch report
 `Cannot build $$$.SUB`.
 
-### STAT — Show file or disk status
+### STAT: Show file or disk status
 
 ```text
 STAT [v[u]:][filespec]
@@ -208,7 +210,7 @@ Vol  Attr  Used  Total
 Total: 2048K  (502K Unalloc)
 ```
 
-### SET — Set file or volume attributes
+### SET: Set file or volume attributes
 
 ```text
 SET [v:]file ATTR
@@ -240,7 +242,7 @@ A> SET B: UM 4
 A> SET B: UM
 ```
 
-### USER — Show or set user area
+### USER: Show or set user area
 
 ```text
 USER [u]
@@ -253,7 +255,7 @@ A> USER
 A> USER 3
 ```
 
-### SYS — Show system information
+### SYS: Show system information
 
 ```text
 SYS
@@ -262,7 +264,7 @@ SYS
 Displays OS, kernel, and CCP versions, TPA size, disk capacity, and mounted
 volumes.
 
-### CLS — Clear screen
+### CLS: Clear screen
 
 ```text
 CLS
@@ -270,7 +272,7 @@ CLS
 
 Clears the console screen and resets the cursor.
 
-### ECHO — Display arguments
+### ECHO: Display arguments
 
 ```text
 ECHO [arg ...]
@@ -284,7 +286,7 @@ ECHO Hello World
 Hello World
 ```
 
-### HELP — Show help
+### HELP: Show help
 
 ```text
 HELP [command]
