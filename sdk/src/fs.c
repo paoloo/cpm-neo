@@ -15,7 +15,7 @@
 
 #define O_RDONLY 0x01
 #define O_WRONLY 0x02
-#define O_CREAT  0x04
+#define O_CREAT 0x04
 #define O_APPEND 0x10
 
 static int g_find_pos = 0;
@@ -46,6 +46,7 @@ static int open_flags(const char *mode)
 int open(const char *path, const char *mode)
 {
     int flags = open_flags(mode);
+
     if (flags < 0)
         return flags;
 
@@ -60,16 +61,19 @@ int open(const char *path, const char *mode)
             return fd;
 
         sys_seek(fd, sys_getsize(fd));
+
         return fd;
     }
 
     if (flags & O_CREAT)
     {
         FileInfo fi;
+
         if (sys_findfile(path, &fi, 0) > 0 && (fi.attrib & FILE_ATTR_READ_ONLY))
             return EFILERO;
 
         int rc = sys_delete(path);
+
         if (rc != EOK && rc != ENOENT)
             return rc;
 
@@ -81,8 +85,8 @@ int open(const char *path, const char *mode)
 
 int readline(int fd, char *buf, int sz)
 {
-    int  pos = 0;
-    int  consumed = 0;
+    int pos = 0;
+    int consumed = 0;
     char ch;
 
     while (read(fd, &ch, 1) == 1)
@@ -110,6 +114,7 @@ int read(int fd, void *buf, uint32_t len)
 {
     if (len <= 0)
         return 0;
+
     return sys_read(fd, buf, len);
 }
 
@@ -117,6 +122,7 @@ int write(int fd, const void *buf, uint32_t len)
 {
     if (len <= 0)
         return 0;
+
     return sys_write(fd, buf, len);
 }
 
@@ -158,6 +164,7 @@ int fsetattr(const char *path, uint8_t attrib)
 int find(const char *name, FileInfo *out)
 {
     int rc = sys_findfile(name, out, 0);
+
     return (rc > 0) ? EOK : rc;
 }
 
@@ -187,10 +194,12 @@ void find_reset(void)
 int fcopy(const char *dst_path, const char *src_path)
 {
     int src_fd = open(src_path, "r");
+
     if (src_fd < 0)
         return src_fd;
 
     int dst_fd = open(dst_path, "w");
+
     if (dst_fd < 0)
     {
         close(src_fd);
@@ -198,11 +207,13 @@ int fcopy(const char *dst_path, const char *src_path)
     }
 
     uint8_t buf[512];
+
     int n, rc = EOK;
 
     while ((n = read(src_fd, buf, sizeof(buf))) > 0)
     {
         int w = write(dst_fd, buf, n);
+
         if (w != n)
         {
             rc = (w < 0) ? w : ENOSPC;

@@ -60,7 +60,9 @@ A `.COM` binary is loaded at the TPA base (`__tpa_base`):
 
 ## Building the OS
 
-`sysgen new` runs `sysgen/build_disk.sh`, which builds four components in order.
+`sysgen new` runs `sysgen/build_disk.sh` with `--platform=<ID>`. The script
+scans each `platform/*/config.sh` for an `ID=` equal to that argument to find
+the platform's directory, then builds four components in order.
 
 1. **Bootloader**: compiles the platform BIOS + `arch/<isa>/boot.S`, linked
    with `arch/<isa>/linker_boot.ld` into a `bootloader.bin`.
@@ -74,6 +76,11 @@ A `.COM` binary is loaded at the TPA base (`__tpa_base`):
      supplied to both passes via `--defsym=`.
 3. **SDK libc**: the user-space library, archived to `libc.a`.
 4. **CCP**: linked like a user program (below).
+
+Each build writes the platform id — the `ID=` field of
+`platform/<folder>/config.sh`, required and 8 chars max — into sector 0
+(`S0_PLATFORM`, 8 bytes at offset `0x01E`); the build fails if `ID` is
+unset or exceeds 8 characters.
 
 ### Linking against the kernel
 

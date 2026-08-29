@@ -22,16 +22,16 @@
 #include "string.h"
 
 /* Vol-checked guard: resolves vol_id and returns ENOVOL if unmounted. */
-#define CHECK_VOL(v, vol_id)         \
-    Volume *v = vol_checked(vol_id); \
-    if (!v)                          \
+#define CHECK_VOL(v, vol_id)                                                                       \
+    Volume *v = vol_checked(vol_id);                                                               \
+    if (!v)                                                                                        \
         return ENOVOL;
 
 /* FCB-checked guard: validates fd, then applies CHECK_VOL on its volume. */
-#define CHECK_FCB(f, v, fd) \
-    FCB *f = fcb_get(fd);   \
-    if (!f)                 \
-        return EBADF;       \
+#define CHECK_FCB(f, v, fd)                                                                        \
+    FCB *f = fcb_get(fd);                                                                          \
+    if (!f)                                                                                        \
+        return EBADF;                                                                              \
     CHECK_VOL(v, f->ctx.vol_id);
 
 typedef struct
@@ -143,8 +143,7 @@ static int wildmatch(const char *pat, const char *str)
         }
 
         if (*str != '\0' &&
-            (*pat == '?' ||
-             toupper((unsigned char)*pat) == toupper((unsigned char)*str)))
+            (*pat == '?' || toupper((unsigned char)*pat) == toupper((unsigned char)*str)))
         {
             pat++;
             str++;
@@ -518,7 +517,9 @@ static int find_extent(FileKey key, uint8_t extent_idx, int16_t hint_diridx, Dir
     }
 
     FindExtentCtx ctx = {key, extent_idx, out};
+
     int rc = dir_scan(v, user, find_extent_cb, &ctx);
+
     return (rc == 1) ? EOK : rc;
 }
 
@@ -536,7 +537,8 @@ static int update_extent(Volume *v, const DirInfo *de)
     return vol_write(v, v->root_start_lba + de->diridx / BD_ENTRIES_PER_SEC, g_bd.sec_buf);
 }
 
-static void fill_dir_entry(uint8_t *entry, const FileKey *key, const DirInfo *de, uint16_t first_block)
+static void fill_dir_entry(uint8_t *entry, const FileKey *key, const DirInfo *de,
+                           uint16_t first_block)
 {
     memset(entry, 0, BD_ENTRY_SIZE);
     memcpy(entry, key->name83, NAME83_LEN);
@@ -547,8 +549,7 @@ static void fill_dir_entry(uint8_t *entry, const FileKey *key, const DirInfo *de
     write16(&entry[BD_DIR_BLOCKS], first_block);
 }
 
-static int create_extent(FileKey key, const DirInfo *de,
-                         uint16_t first_block, int16_t hint_diridx,
+static int create_extent(FileKey key, const DirInfo *de, uint16_t first_block, int16_t hint_diridx,
                          uint16_t *out_diridx)
 {
     Volume *v = key.v;
@@ -556,13 +557,16 @@ static int create_extent(FileKey key, const DirInfo *de,
     if (hint_diridx >= 0 && (uint16_t)hint_diridx < BD_ROOT_ENTRIES)
     {
         uint8_t *entry = load_dir_entry(v, (uint16_t)hint_diridx);
+
         if (entry && (entry[0] == BD_ENTRY_EMPTY || entry[0] == BD_ENTRY_DELETED))
         {
             fill_dir_entry(entry, &key, de, first_block);
+
             if (out_diridx)
                 *out_diridx = (uint16_t)hint_diridx;
 
-            return vol_write(v, v->root_start_lba + (uint16_t)hint_diridx / BD_ENTRIES_PER_SEC, g_bd.sec_buf);
+            return vol_write(v, v->root_start_lba + (uint16_t)hint_diridx / BD_ENTRIES_PER_SEC,
+                             g_bd.sec_buf);
         }
     }
 
@@ -614,8 +618,8 @@ static int scan_extents_cb(Volume *vol, const uint8_t *entry, uint16_t diridx, v
     return 0;
 }
 
-static int scan_extents(FileKey key, uint16_t *first_diridx, int *count,
-                        uint32_t *out_size, uint32_t *out_alloc)
+static int scan_extents(FileKey key, uint16_t *first_diridx, int *count, uint32_t *out_size,
+                        uint32_t *out_alloc)
 {
     ScanExtentsCtx ctx = {
         .key = key,
@@ -664,7 +668,10 @@ static int resolve_extent(FCB *f, Volume *v)
 
 static int fcb_flush(FCB *f, Volume *v)
 {
-    DirInfo ude = {.diridx = f->cur_diridx, .extent_bytes = f->extent_bytes, .extent_idx = f->extent_idx, .attrib = f->attrib};
+    DirInfo ude = {.diridx = f->cur_diridx,
+                   .extent_bytes = f->extent_bytes,
+                   .extent_idx = f->extent_idx,
+                   .attrib = f->attrib};
     memcpy(ude.blocks, f->blocks, sizeof(ude.blocks));
     return update_extent(v, &ude);
 }
@@ -1087,8 +1094,9 @@ int bd_write(int fd, const uint8_t *buf, uint16_t len)
                 return bw ? (int)bw : flrc;
 
             DirInfo fdi;
-            int find_rc = find_extent(make_key(v, (const char *)f->name83, f->ctx.user_area), (uint8_t)extent_idx,
-                                      (int16_t)(f->ext0_diridx + extent_idx), &fdi);
+            int find_rc =
+                find_extent(make_key(v, (const char *)f->name83, f->ctx.user_area),
+                            (uint8_t)extent_idx, (int16_t)(f->ext0_diridx + extent_idx), &fdi);
 
             if (find_rc == EOK)
             {
@@ -1105,9 +1113,9 @@ int bd_write(int fd, const uint8_t *buf, uint16_t len)
 
                 DirInfo nde = {.extent_idx = (uint8_t)extent_idx, .attrib = f->attrib};
                 uint16_t ndi;
-                int rc = create_extent(make_key(v, (const char *)f->name83, f->ctx.user_area),
-                                       &nde, (uint16_t)new_block,
-                                       (int16_t)(f->ext0_diridx + extent_idx), &ndi);
+                int rc = create_extent(make_key(v, (const char *)f->name83, f->ctx.user_area), &nde,
+                                       (uint16_t)new_block, (int16_t)(f->ext0_diridx + extent_idx),
+                                       &ndi);
                 if (rc != EOK)
                 {
                     free_block(v, (uint16_t)new_block);
@@ -1492,8 +1500,7 @@ int bd_fsetattr(const char *name83, FsContext ctx, uint8_t attrib)
         if (!entry)
             return EIO;
         entry[BD_DIR_ATTR] = attrib;
-        if (vol_write(v, v->root_start_lba + di.diridx / BD_ENTRIES_PER_SEC,
-                      g_bd.sec_buf) != EOK)
+        if (vol_write(v, v->root_start_lba + di.diridx / BD_ENTRIES_PER_SEC, g_bd.sec_buf) != EOK)
             return EIO;
 
         rc = EOK;

@@ -1,7 +1,10 @@
 #!/usr/bin/env sh
 # CP/M Neo generic app builder — compiles any source folder to a .com.
 #
-#   sh sysgen/app_build.sh <PLATFORM> <APP_DIR> [-o OUT.com]
+#   sh sysgen/app_build.sh <PLATFORM_DIR> <APP_DIR> [-o OUT.com]
+#
+# <PLATFORM_DIR> is the internal platform directory (from sysgen/build/
+# .platform_dir), used only to locate the platform's config.sh and includes.
 #
 # Scans <APP_DIR> recursively for .c/.s/.S sources and links a raw .com
 # binary ready to run from the TPA.  Requires a prior 'sysgen new' build
@@ -12,7 +15,7 @@
 
 set -eu
 
-PLATFORM=${1:?}
+PLATFORM_DIR=${1:?}
 APP_DIR=${2:?}
 OUT=
 shift 2
@@ -53,11 +56,11 @@ INT="$BUILD/core/int"
 SDK_OBJ="$BUILD/sdk/obj"
 SDK_LIB="$BUILD/sdk/lib"
 
-# Platform metadata (ARCH, IO_BASE, RAM_BASE) from platform/$PLATFORM/config.sh
+# Platform metadata (ARCH, IO_BASE, RAM_BASE) from platform/$PLATFORM_DIR/config.sh
 # shellcheck source=/dev/null
-. "platform/$PLATFORM/config.sh"
+. "platform/$PLATFORM_DIR/config.sh"
 
-ARCH=${ARCH:?"$PLATFORM: ARCH not set in platform/$PLATFORM/config.sh"}
+ARCH=${ARCH:?"$PLATFORM_DIR: ARCH not set in platform/$PLATFORM_DIR/config.sh"}
 
 # Architecture metadata (toolchain prefix + CFLAGS) from arch/$ARCH/config.sh
 # shellcheck source=/dev/null

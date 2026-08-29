@@ -1,22 +1,22 @@
 #include "utils.h"
-#include "kernel_abi.h"
 #include "bdos.h"
 #include "disk.h"
+#include "kernel_abi.h"
 #include "sysgen.h"
 
+#include <ctype.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
-#include <ctype.h>
 
 #if defined(_WIN32)
 #include <windows.h>
 #else
 #include <dirent.h>
-#include <sys/stat.h>
 #include <errno.h>
 #include <spawn.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 extern char **environ;
 #endif
@@ -130,8 +130,7 @@ int reject_unknown_flags(int argc, char **argv, const char *const *allowed)
         for (int a = 0; allowed[a]; a++)
         {
             size_t n = strlen(allowed[a]);
-            if (strncmp(argv[i], allowed[a], n) == 0 &&
-                (argv[i][n] == '=' || argv[i][n] == '\0'))
+            if (strncmp(argv[i], allowed[a], n) == 0 && (argv[i][n] == '=' || argv[i][n] == '\0'))
             {
                 ok = 1;
                 break;
@@ -520,6 +519,7 @@ int mount_vol(int8_t vol)
 
         return 0;
     }
+
     if (bd_bind(vol) != EOK)
     {
         err("volume %c: cannot mount", 'A' + vol);
@@ -658,7 +658,7 @@ int spawn_and_wait(char *const argv[])
         err("'%s' exited abnormally or with a nonzero status", argv[0]);
         return -1;
     }
-    
+
     return 0;
 }
 

@@ -15,9 +15,9 @@
 
 #include "kernel.h"
 #include "disk.h"
-#include <limits.h>
-#include "string.h"
 #include "stdlib.h"
+#include "string.h"
+#include <limits.h>
 
 #define JUMP_TPA() ((void (*)(void))(uintptr_t)__tpa_base)()
 
@@ -316,8 +316,7 @@ int sys_read(int fd, void *buf, uint32_t len)
     uint32_t total = 0;
     while (total < len)
     {
-        uint16_t chunk = (len - total > 0xFFFFu) ? 0xFFFFu
-                                                 : (uint16_t)(len - total);
+        uint16_t chunk = (len - total > 0xFFFFu) ? 0xFFFFu : (uint16_t)(len - total);
         int r = bd_read(kfd, p + total, chunk);
         if (r < 0)
             return total ? (int)total : r;
@@ -347,8 +346,7 @@ int sys_write(int fd, const void *buf, uint32_t len)
     uint32_t total = 0;
     while (total < len)
     {
-        uint16_t chunk = (len - total > 0xFFFFu) ? 0xFFFFu
-                                                 : (uint16_t)(len - total);
+        uint16_t chunk = (len - total > 0xFFFFu) ? 0xFFFFu : (uint16_t)(len - total);
         int w = bd_write(kfd, p + total, chunk);
         if (w < 0)
             return total ? (int)total : w;
@@ -389,14 +387,11 @@ int sys_findfile(const char *pattern, FileInfo *out, uint16_t start_pos)
     FsContext ctx = parse_prefix(&pattern);
     char n83[12];
     int err = make_name83(pattern, n83);
+
     if (err != EOK)
         return err;
 
-    int rc = bd_find(n83, ctx, out, start_pos);
-    if (rc > 0)
-        return rc;
-
-    return rc;
+    return bd_find(n83, ctx, out, start_pos);
 }
 
 uint32_t sys_getsize(int fd)
@@ -500,10 +495,9 @@ int sys_dev(uint32_t reg, uint32_t cmd, uint32_t *data)
 
     /* Check the sum's parts first: reg + delta must not wrap around. */
     uint32_t delta = cmd & IOCTL_OFF_MASK;
-    if (reg > (uint32_t)IO_SIZE - 4 ||
-        delta > (uint32_t)IO_SIZE - 4 - reg ||
-        ((reg + delta) & 3) != 0)
 
+    if (reg > (uint32_t)IO_SIZE - 4 || delta > (uint32_t)IO_SIZE - 4 - reg ||
+        ((reg + delta) & 3) != 0)
         return EINVAL;
 
     uint32_t off = reg + delta;
@@ -672,32 +666,32 @@ int sys_consize(uint8_t *cw, uint8_t *ch)
  * in kernel_abi.h exactly.
  */
 const SyscallTable g_syscall_table = {
-    .open     = sys_open,
-    .read     = sys_read,
-    .write    = sys_write,
-    .close    = sys_close,
-    .exit     = sys_exit,
-    .args     = sys_args,
+    .open = sys_open,
+    .read = sys_read,
+    .write = sys_write,
+    .close = sys_close,
+    .exit = sys_exit,
+    .args = sys_args,
     .findfile = sys_findfile,
-    .getsize  = sys_getsize,
-    .create   = sys_create,
-    .delete   = sys_delete,
-    .rename   = sys_rename,
-    .mount    = sys_mount,
-    .unmount  = sys_unmount,
-    .extend   = sys_extend,
-    .vstat    = sys_vstat,
-    .exec     = sys_exec,
-    .dev      = sys_dev,
+    .getsize = sys_getsize,
+    .create = sys_create,
+    .delete = sys_delete,
+    .rename = sys_rename,
+    .mount = sys_mount,
+    .unmount = sys_unmount,
+    .extend = sys_extend,
+    .vstat = sys_vstat,
+    .exec = sys_exec,
+    .dev = sys_dev,
     .fsetattr = sys_fsetattr,
-    .info     = sys_info,
-    .seek     = sys_seek,
-    .getctx   = sys_getctx,
-    .setctx   = sys_setctx,
-    .getenv   = sys_getenv,
-    .setenv   = sys_setenv,
+    .info = sys_info,
+    .seek = sys_seek,
+    .getctx = sys_getctx,
+    .setctx = sys_setctx,
+    .getenv = sys_getenv,
+    .setenv = sys_setenv,
     .vsetattr = sys_vsetattr,
-    .time     = sys_time,
-    .sync     = sys_sync,
-    .consize  = sys_consize,
+    .time = sys_time,
+    .sync = sys_sync,
+    .consize = sys_consize,
 };

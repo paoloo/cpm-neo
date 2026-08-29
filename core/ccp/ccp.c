@@ -22,16 +22,15 @@ static FsContext g_ctx;
 static CcpBuf g_buf;
 
 /* Resident commands — everything else falls through to try_implicit_run(). */
-static const CmdEntry g_cmds[] = {
-    {.name = "DIR", .fn = cmd_dir},
-    {.name = "DIRS", .fn = cmd_dirs},
-    {.name = "ERA", .fn = cmd_era},
-    {.name = "REN", .fn = cmd_ren},
-    {.name = "TYPE", .fn = cmd_type},
-    {.name = "USER", .fn = cmd_user},
-    {.name = "ECHO", .fn = cmd_echo},
-    {.name = "CLS", .fn = cmd_cls},
-    {0}};
+static const CmdEntry g_cmds[] = {{.name = "DIR", .fn = cmd_dir},
+                                  {.name = "DIRS", .fn = cmd_dirs},
+                                  {.name = "ERA", .fn = cmd_era},
+                                  {.name = "REN", .fn = cmd_ren},
+                                  {.name = "TYPE", .fn = cmd_type},
+                                  {.name = "USER", .fn = cmd_user},
+                                  {.name = "ECHO", .fn = cmd_echo},
+                                  {.name = "CLS", .fn = cmd_cls},
+                                  {0}};
 
 int ccp_setuser(FsContext *ctx, uint8_t ua)
 {

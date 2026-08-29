@@ -211,8 +211,7 @@ static int tok_match(const char *arg, const FTok *f)
 
     case TOK_ATTR:
     {
-        static const char *const attrs[] =
-            {"RO", "RW", "SYS", "DIR", "MT", "EX", "UM"};
+        static const char *const attrs[] = {"RO", "RW", "SYS", "DIR", "MT", "EX", "UM"};
 
         for (int i = 0; i < 7; i++)
             if (strcasecmp(arg, attrs[i]) == 0)
@@ -374,16 +373,16 @@ void cmderr_print(CmdErr err)
             printf("%s?\n", err.token);
         else
             printf("?\n");
-
-        return;
     }
-
-    /* ENOENT/EEXIST are plain errno errors even when a volume is
-     * attached; any other volume-scoped failure is a BDOS error. */
-    if (err.vol_id >= 0 && err.err_code != ENOENT && err.err_code != EEXIST)
-        printf("Bdos Err On %c: %s\n", 'A' + err.vol_id, strerror(err.err_code));
     else
-        printf("%s\n", strerror(err.err_code));
+    {
+        /* ENOENT/EEXIST are plain errno errors even when a volume is
+         * attached; any other volume-scoped failure is a BDOS error. */
+        if (err.vol_id >= 0 && err.err_code != ENOENT && err.err_code != EEXIST)
+            printf("Bdos Err On %c: %s\n", 'A' + err.vol_id, strerror(err.err_code));
+        else
+            printf("%s\n", strerror(err.err_code));
+    }
 
     sys_setenv(ENV_RETURN_CODE, (uint32_t)err.err_code);
 }
@@ -395,7 +394,7 @@ const CmdEntry *cmd_lookup(const CmdEntry *table, const char *name)
         if (!strcasecmp(table[i].name, name))
             return &table[i];
     }
-    
+
     return NULL;
 }
 

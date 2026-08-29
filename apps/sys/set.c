@@ -153,6 +153,7 @@ static CmdErr cmd_set(FsContext *ctx, int argc, char **argv)
         return cmderr_syntax(NULL);
 
     FileRef ref;
+
     if (!parse_fileref(ctx, argv[1], &ref))
         return cmderr_syntax(NULL);
 

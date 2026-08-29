@@ -36,7 +36,7 @@ $ ./sysgen/build/sysgen new \
 |---|---|
 | `--disk-size` | Disk size in KB. Requires a `K` suffix, e.g. `2048K`. Defaults to the maximum useful size |
 | `--mem` | RAM size in KB. Requires a `K` suffix, e.g. `64K` |
-| `--platform` | Target platform (`platform/<name>` dir). `vemu` is included with the repository; its `config.sh` selects the ISA and memory layout |
+| `--platform` | Target platform id: the 8-char max `ID=` declared by a platform's `config.sh` (platforms under `platform/`). `vemu` is included with the repository; its `config.sh` selects the ISA and memory layout |
 | `--no-extra` | Do not install optional apps from `apps/extra` |
 
 `sysgen new` always writes the image to:

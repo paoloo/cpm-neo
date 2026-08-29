@@ -1,5 +1,5 @@
 /*
-  * sysgen/mkdisk.c
+ * sysgen/mkdisk.c
  * CP/M Neo SYSGEN — disk image assembly
  *
  * Writes sector 0 (geometry), the VMAP at sector 1 (block grid + VolRec[4]),
@@ -13,11 +13,11 @@
 #include "bdos.h"
 #include "sysgen.h"
 
+#include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 
 static uint32_t min_viable_blocks(void)
 {
@@ -48,8 +48,7 @@ static uint32_t reserve_kernel_ccp(uint32_t kern_size, uint32_t ccp_size)
 
 static uint32_t read32(const uint8_t *p)
 {
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
-           ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
 static void write32(uint8_t *p, uint32_t v)
@@ -228,7 +227,7 @@ int write_file(const char *path, const uint8_t *data, uint32_t len)
     int rc = fclose(f);
     if (w != (size_t)len)
         return -1;
-        
+
     return rc;
 }
 
@@ -241,12 +240,9 @@ int write_file(const char *path, const uint8_t *data, uint32_t len)
  * Returns the number of reserved sectors (kernel + CCP) on success,
  * or -1 on error (disk too small, invalid parameters, OOM).
  */
-int mkdisk_build(uint32_t size_kb,
-                const uint8_t *kern, uint32_t kern_size,
-                const uint8_t *ccp, uint32_t ccp_size,
-                uint32_t kern_load,
-                uint16_t os_ver, uint16_t kern_ver, uint16_t ccp_ver,
-                const char *platform)
+int mkdisk_build(uint32_t size_kb, const uint8_t *kern, uint32_t kern_size, const uint8_t *ccp,
+                 uint32_t ccp_size, uint32_t kern_load, uint16_t os_ver, uint16_t kern_ver,
+                 uint16_t ccp_ver, const char *platform)
 {
     if (!kern || kern_size == 0 || size_kb == 0)
         return -1;

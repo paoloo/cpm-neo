@@ -18,18 +18,18 @@
 set -eu
 
 MEM_SIZE=""
-PLATFORM=""
+PLATFORM_ID=""
 
 for arg in "$@"; do
     case "$arg" in
         --mem=*)    MEM_SIZE="${arg#--mem=}" ;;
-        --platform=*) PLATFORM="${arg#--platform=}" ;;
+        --platform=*) PLATFORM_ID="${arg#--platform=}" ;;
         *) echo "Unknown option: $arg" >&2; exit 1 ;;
     esac
 done
 
 MEM_SIZE=${MEM_SIZE:?"--mem is required (e.g. --mem=64K)"}
-PLATFORM=${PLATFORM:?"--platform is required"}
+PLATFORM_ID=${PLATFORM_ID:?"--platform=<ID> is required"}
 
 # Convert --mem=64K style suffix to hex bytes for ld --defsym
 mem_kb=$(printf '%s' "$MEM_SIZE" | tr '[:lower:]' '[:upper:]')
@@ -50,13 +50,71 @@ CCP_OBJ="$BUILD/core/obj/ccp"
 SDK_OBJ="$BUILD/sdk/obj"
 SDK_LIB="$BUILD/sdk/lib"
 
-# Platform metadata (ARCH, IO_BASE, RAM_BASE) from platform/$PLATFORM/config.sh
-# shellcheck source=/dev/null
-. "platform/$PLATFORM/config.sh"
+# ---------------------------------------------------------------------------
+# Platform lookup: --platform=<ID> must match the ID= field of one platform
+# config.sh.  The platform folder is purely a filesystem location derived
+# here; it is never a platform identity.
+# ---------------------------------------------------------------------------
+match_id() {
+    awk -F= '
+        /^[[:space:]]*ID=/ {
+            v=$2
+            gsub(/[ \t\r]/, "", v)
+            gsub(/^"+|"+$/, "", v)
+            if (v != "" && !done) { print v; done=1 }
+        }' "$1"
+}
 
-ARCH=${ARCH:?"$PLATFORM: ARCH not set in platform/$PLATFORM/config.sh"}
-IO_BASE=${IO_BASE:?"$PLATFORM: IO_BASE not set in platform/$PLATFORM/config.sh"}
-RAM_BASE=${RAM_BASE:?"$PLATFORM: RAM_BASE not set in platform/$PLATFORM/config.sh"}
+PLATFORM_DIR=""
+for CFG in platform/*/config.sh; do
+    CFG_ID=$(match_id "$CFG")
+
+    if [ -z "$CFG_ID" ]; then
+        continue
+    fi
+
+    CFG_ID_U=$(printf '%s' "$CFG_ID"            | tr '[:lower:]' '[:upper:]')
+    ARG_ID_U=$(printf '%s' "$PLATFORM_ID"       | tr '[:lower:]' '[:upper:]')
+
+    if [ "$CFG_ID_U" = "$ARG_ID_U" ]; then
+        if [ -n "$PLATFORM_DIR" ]; then
+            OTHER_DIR=${CFG%/config.sh}
+            OTHER_DIR=${OTHER_DIR#platform/}
+
+            echo "ERROR: duplicate platform ID '$PLATFORM_ID' in '$PLATFORM_DIR' and '$OTHER_DIR'" >&2
+            exit 1
+        fi
+
+        PLATFORM_DIR=${CFG%/config.sh}
+        PLATFORM_DIR=${PLATFORM_DIR#platform/}
+    fi
+done
+
+if [ -z "$PLATFORM_DIR" ]; then
+    echo "ERROR: unknown platform '$PLATFORM_ID'" >&2
+    exit 1
+fi
+
+# Platform metadata (ARCH, IO_BASE, RAM_BASE, ID) from platform/$PLATFORM_DIR/config.sh
+# shellcheck source=/dev/null
+. "platform/$PLATFORM_DIR/config.sh"
+
+ARCH=${ARCH:?"$PLATFORM_ID: ARCH not set in platform/$PLATFORM_DIR/config.sh"}
+IO_BASE=${IO_BASE:?"$PLATFORM_ID: IO_BASE not set in platform/$PLATFORM_DIR/config.sh"}
+RAM_BASE=${RAM_BASE:?"$PLATFORM_ID: RAM_BASE not set in platform/$PLATFORM_DIR/config.sh"}
+ID=${ID:?"$PLATFORM_ID: ID not set in platform/$PLATFORM_DIR/config.sh (8-char OS platform id)"}
+
+CFG_ID_U=$(printf '%s' "$ID"          | tr '[:lower:]' '[:upper:]')
+ARG_ID_U=$(printf '%s' "$PLATFORM_ID" | tr '[:lower:]' '[:upper:]')
+if [ "$CFG_ID_U" != "$ARG_ID_U" ]; then
+    echo "ERROR: platform ID mismatch: config.sh declares '$ID' but --platform=$PLATFORM_ID" >&2
+    exit 1
+fi
+
+if [ "${#ID}" -gt 8 ]; then
+    echo "ERROR: ID '$ID' exceeds the 8-char S0_PLATFORM limit" >&2
+    exit 1
+fi
 
 # Architecture metadata (toolchain prefix + CFLAGS) from arch/$ARCH/config.sh
 # shellcheck source=/dev/null
@@ -95,7 +153,7 @@ CFLAGS="$ARCH_FLAGS -ffreestanding -nostdlib \
         -Wall -Wextra"
 LDFLAGS="--gc-sections --strip-debug --no-warn-rwx-segments -m $LD_EMULATION"
 
-PLATFORM_INC="-I platform/$PLATFORM"
+PLATFORM_INC="-I platform/$PLATFORM_DIR"
 KERNEL_INC="-I core/kernel/ -I sdk/include -I core/ -I ./ $PLATFORM_INC"
 CCP_INC="-I core/ccp/ -I core/kernel/ -I sdk/include -I core/ -I ./ $PLATFORM_INC"
 SDK_INC="-I sdk/include -I core/kernel/ -I core/ -I ./ $PLATFORM_INC"
@@ -110,7 +168,7 @@ mkdir -p "$BUILD" "$INT" "$SDK_LIB"
 # ── Bootloader ─────────────────────────────────────────────
 echo "  Building bootloader..."
 $CC $CFLAGS $PLATFORM_INC -I core/kernel/ \
-    -c "platform/$PLATFORM/bios.c" -o "$INT/boot_plat.o"
+    -c "platform/$PLATFORM_DIR/bios.c" -o "$INT/boot_plat.o"
 $CC $CFLAGS -I arch/$ARCH/ -I core/kernel/ \
     -Wl,--gc-sections -Wl,--strip-debug \
     -Wl,--defsym=__io_base="$IO_BASE_HEX" \
@@ -127,7 +185,7 @@ fi
 # ── Kernel (two-pass) ──────────────────────────────────────
 echo "  Building kernel..."
 KERNEL_C="core/kernel/main.c core/kernel/kernel.c core/kernel/bdos.c \
-          core/kernel/disk.c platform/$PLATFORM/bios.c \
+          core/kernel/disk.c platform/$PLATFORM_DIR/bios.c \
           sdk/src/string.c sdk/src/stdio.c sdk/src/fs.c sdk/src/stdlib.c"
 KERNEL_S="arch/$ARCH/crt0.S"
 
@@ -206,5 +264,6 @@ $LD $LDFLAGS -T sdk/linker/linker_sdk.ld \
     --just-symbols="$INT/kernel.elf" -o "$INT/ccp.elf"
 $OBJCOPY -O binary "$INT/ccp.elf" "$INT/ccp.bin"
 
-printf '%s' "$PLATFORM" > "$BUILD/.platform"
-printf '  Platform        : %s (ISA: %s)\n' "$PLATFORM" "$ARCH"
+printf '%s' "$PLATFORM_DIR" > "$BUILD/.platform_dir"
+printf '%s' "$ID" > "$BUILD/.platform_id"
+printf '  Platform        : %s (ISA: %s)\n' "$PLATFORM_ID" "$ARCH"

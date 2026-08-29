@@ -81,12 +81,11 @@ static const HelpRec g_recs[] = {
      "Shows OS, kernel, and CCP versions, TPA size, disk capacity,\n"
      "and mounted volumes."},
 
-    {"CLS", "other", "CLS", "Clear screen",
-     "Clears the console screen."},
+    {"CLS", "other", "CLS", "Clear screen", "Clears the console screen."},
 
     {"ECHO", "other", "ECHO [arg ...]", "Display arguments to console",
      "Displays the arguments, separated by a single space character\n"
-      "and followed by a newline."},
+     "and followed by a newline."},
 
     {"HELP", "other", "HELP [command]", "Show help information",
      "Lists commands, or shows detailed help for a command."},
@@ -118,6 +117,7 @@ static int print_one(const char *name)
             continue;
 
         printf("\n%s -- %s\n\n", r->name, r->desc);
+
         printf("  %s\n\n", r->usage);
 
         if (r->detail[0])
@@ -151,6 +151,7 @@ static void print_all(void)
             }
 
             const char *u = r->usage + strlen(r->name);
+
             while (*u == ' ')
                 u++;
 
@@ -168,18 +169,19 @@ int main(int argc, char **argv)
         cmderr_print(cmderr_syntax(NULL));
         return CMDERR_SYNTAX;
     }
-    else if (argc > 1)
+
+    if (argc > 1)
     {
         if (!print_one(argv[1]))
         {
             printf("%s?\n", argv[1]);
             return ENOENT;
         }
+
+        return EOK;
     }
-    else
-    {
-        print_all();
-    }
+
+    print_all();
 
     return EOK;
 }

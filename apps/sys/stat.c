@@ -16,12 +16,16 @@ static const char *stat_file_fmt = "f*"; /* STAT FOO.TXT — file stats */
 static CmdErr stat_vol_single(int8_t vol)
 {
     VolStat ds;
+
     int rc = vstat(vol, &ds);
+
     if (rc != EOK)
         return cmderr_bdos(vol, rc);
 
     printf("%c: ", 'A' + vol);
+
     const char *mode = ds.read_only ? "RO" : "RW";
+
     printf("%s, Free: %uK\n", mode, ds.free_blocks);
 
     return cmderr_ok();
@@ -30,11 +34,14 @@ static CmdErr stat_vol_single(int8_t vol)
 static CmdErr stat_vol(int8_t vol)
 {
     VolStat ds;
+
     int rc = vstat(vol, &ds);
+
     if (rc != EOK)
         return cmderr_bdos(vol, rc);
 
     printf("Bytes Remaining on %c: ", 'A' + vol);
+
     printf("%uK\n", ds.free_blocks);
 
     return cmderr_ok();
@@ -54,21 +61,21 @@ static void stat_file(int8_t vol_id, FileInfo *di)
     pad_field(base, sn.base, sn.base_len, NAME83_BASE); /* left-justified in 8 */
     pad_field(ext, sn.ext, sn.ext_len, sn.ext_len);     /* NUL-copy only      */
 
-    printf(" %4u%6uk%5u %s %-2s         %c:%s.%s\n",
-           secs, kb, di->extents,
-           cls, acc,
-           'A' + vol_id, base, ext);
+    printf(" %4u%6uk%5u %s %-2s         %c:%s.%s\n", secs, kb, di->extents, cls, acc, 'A' + vol_id,
+           base, ext);
 }
 
 static CmdErr stat_dsk(void)
 {
     SysInfo si;
+
     if (sys_info(&si) != EOK)
         return cmderr_bdos(0, EIO);
 
     printf(" Vol  Mode  Used  Total\n");
 
     VolStat vs;
+
     uint16_t disk_usable_k = 0;
 
     for (int v = 0; v < VOL_MAX; v++)
@@ -86,7 +93,9 @@ static CmdErr stat_dsk(void)
         printf("  %c:  %4s %4uK  %4uK\n", 'A' + v, mode, vol_used_k, vs.total_blocks);
     }
 
-    printf("\nDisk: %uk (%uk Usable, %uk Unalloc)\n", si.disk_size_kb, disk_usable_k, si.disk_unalloc_kb);
+    printf("\nDisk: %uk (%uk Usable, %uk Unalloc)\n", si.disk_size_kb, disk_usable_k,
+           si.disk_unalloc_kb);
+
     return cmderr_ok();
 }
 
@@ -97,17 +106,18 @@ static CmdErr cmd_stat(FsContext *ctx, int argc, char **argv)
         if (check_fmt(argc, argv, "DSK:"))
             return stat_dsk();
 
-        if (!check_fmt(argc, argv, stat_vol_fmt) &&
-            !check_fmt(argc, argv, stat_file_fmt))
+        if (!check_fmt(argc, argv, stat_vol_fmt) && !check_fmt(argc, argv, stat_file_fmt))
             return cmderr_syntax(NULL);
     }
 
     char full_pat[FSPATH_MAX];
+
     int8_t vol_id = ctx->vol_id;
 
     if (argc >= 2)
     {
         FileRef ref;
+
         if (!parse_fileref(ctx, argv[1], &ref))
             return cmderr_syntax(NULL);
 
@@ -120,14 +130,13 @@ static CmdErr cmd_stat(FsContext *ctx, int argc, char **argv)
     }
 
     if (argc < 2)
-    {
         return stat_vol_single(vol_id);
-    }
 
     if (full_pat[0] == '\0')
         return stat_vol(vol_id);
 
     VolStat ds;
+
     if (vstat(vol_id, &ds) != EOK)
         return cmderr_bdos(vol_id, EIO);
 
@@ -136,9 +145,7 @@ static CmdErr cmd_stat(FsContext *ctx, int argc, char **argv)
     find_reset();
 
     if (find_next(full_pat, &di) != EOK)
-    {
         return cmderr_errno(ENOENT);
-    }
 
     printf(" Secs  Bytes  Ext Attributes      Name\n");
 
@@ -148,6 +155,7 @@ static CmdErr cmd_stat(FsContext *ctx, int argc, char **argv)
     } while (find_next(full_pat, &di) == EOK);
 
     putchar('\n');
+
     return stat_vol(vol_id);
 }
 

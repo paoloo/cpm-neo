@@ -54,7 +54,7 @@ See the [User Guide](docs/user-guide.md) for the full build and execution walkth
 
 | Command | Description |
 | --- | --- |
-| `new --disk-size=KBK --mem=KBK --platform=NAME` | Build the OS and create a disk image (the disk is divided into 1 KB blocks; `--disk-size` is capped at the useful maximum: 2 MB). The target's ISA comes from `platform/NAME/config.sh` |
+| `new --disk-size=KBK --mem=KBK --platform=NAME` | Build the OS and create a disk image (the disk is divided into 1 KB blocks; `--disk-size` is capped at the useful maximum: 2 MB). `NAME` is the 8-char max platform id declared by `ID=` in a platform's `config.sh` |
 | `add <file> [--dst=Vn] [--attr=R/W\|R/O\|SYS]` | Add an external file to an image |
 | `install <folder> [--dst=Vn] [--attr=...]` | Compile a source folder and install the binaries |
 | `dir [Vn]` | List files on a volume |
@@ -63,7 +63,8 @@ See the [User Guide](docs/user-guide.md) for the full build and execution walkth
 | `ren <old> <new> [Vn]` | Rename a file |
 | `stat` | Show volume usage and metadata |
 
-Platforms are defined in `platform/<name>/bios.c`.
+Platforms are defined in `platform/<name>/`: `config.sh` plus `bios.c`, with
+optional `frontend.c`/`backend.c` driver files.
 
 See the [Developer Guide](docs/developer-guide.md) to add your own.
 

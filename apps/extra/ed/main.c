@@ -41,22 +41,26 @@ int main(int argc, char **argv)
             else
             {
                 e.cur = next;
-                printf("     %d: %s\n", next + 1,
-                       e.buf + log_to_phys(&e, e.line_off[next]));
+                printf("     %d: %s\n", next + 1, e.buf + log_to_phys(&e, e.line_off[next]));
             }
             continue;
         }
 
         int has_from = 0, from = 0;
         int neg = 0;
-        if (c == '-') { neg = 1; c = (unsigned char)cmd[i++]; }
+        if (c == '-')
+        {
+            neg = 1;
+            c = (unsigned char)cmd[i++];
+        }
         while (isdigit(c))
         {
             has_from = 1;
             from = from * 10 + (c - '0');
             c = (unsigned char)cmd[i++];
         }
-        if (neg) from = -from;
+        if (neg)
+            from = -from;
 
         int has_comma = 0, has_to = 0, to = 0;
         if (c == ',')
@@ -76,13 +80,21 @@ int main(int argc, char **argv)
         switch (c)
         {
         case 'B':
-            if (cmd[i]) { printf("?\n"); break; }
+            if (cmd[i])
+            {
+                printf("?\n");
+                break;
+            }
             e.cur = -1;
             break;
 
         case 'L':
         {
-            if (cmd[i]) { printf("?\n"); break; }
+            if (cmd[i])
+            {
+                printf("?\n");
+                break;
+            }
             int f, t;
             if (has_comma)
             {
@@ -100,11 +112,17 @@ int main(int argc, char **argv)
                 {
                     int cur = (e.cur < 0) ? 0 : e.cur;
                     f = cur + from;
-                    if (f < 0) f = 0;
+                    if (f < 0)
+                        f = 0;
                     t = cur - 1;
                 }
-                if (t >= e.num_lines) t = e.num_lines - 1;
-                if (f > t) { printf("?\n"); break; }
+                if (t >= e.num_lines)
+                    t = e.num_lines - 1;
+                if (f > t)
+                {
+                    printf("?\n");
+                    break;
+                }
             }
             else
             {
@@ -117,8 +135,16 @@ int main(int argc, char **argv)
 
         case 'D':
         {
-            if (e.readonly) { printf("** FILE IS READ/ONLY **\n"); break; }
-            if (cmd[i]) { printf("?\n"); break; }
+            if (e.readonly)
+            {
+                printf("** FILE IS READ/ONLY **\n");
+                break;
+            }
+            if (cmd[i])
+            {
+                printf("?\n");
+                break;
+            }
             if (has_comma)
             {
                 int f = has_from ? from - 1 : 0;
@@ -138,14 +164,26 @@ int main(int argc, char **argv)
         }
 
         case 'I':
-            if (e.readonly) { printf("** FILE IS READ/ONLY **\n"); break; }
-            if (cmd[i]) { printf("?\n"); break; }
+            if (e.readonly)
+            {
+                printf("** FILE IS READ/ONLY **\n");
+                break;
+            }
+            if (cmd[i])
+            {
+                printf("?\n");
+                break;
+            }
             ed_insert(&e, has_from ? from - 1 : e.cur + 1);
             break;
 
         case 'S':
         {
-            if (e.readonly) { printf("** FILE IS READ/ONLY **\n"); break; }
+            if (e.readonly)
+            {
+                printf("** FILE IS READ/ONLY **\n");
+                break;
+            }
             int sep = (unsigned char)cmd[i++];
             if (sep != '/')
             {
@@ -173,18 +211,30 @@ int main(int argc, char **argv)
             memcpy(new_s, cmd + i, len);
             new_s[len] = 0;
             i += len + 1;
-            if (cmd[i]) { printf("?\n"); break; }
+            if (cmd[i])
+            {
+                printf("?\n");
+                break;
+            }
             ed_subst(&e, has_from ? from - 1 : e.cur, old, new_s);
             break;
         }
 
         case '#':
-            if (cmd[i]) { printf("?\n"); break; }
+            if (cmd[i])
+            {
+                printf("?\n");
+                break;
+            }
             e.verify = !e.verify;
             break;
 
         case 'H':
-            if (cmd[i]) { printf("?\n"); break; }
+            if (cmd[i])
+            {
+                printf("?\n");
+                break;
+            }
             /* Save to disk, then resume editing at the top of the
              * (now clean) buffer. Never just drop the flag — that
              * lost all unsaved work on a following Q. */
@@ -195,7 +245,11 @@ int main(int argc, char **argv)
 
         case 'R':
         {
-            if (e.readonly) { printf("** FILE IS READ/ONLY **\n"); break; }
+            if (e.readonly)
+            {
+                printf("** FILE IS READ/ONLY **\n");
+                break;
+            }
             char fname[ARG_LEN_MAX];
             strncpy(fname, cmd + i, sizeof(fname) - 1);
             fname[sizeof(fname) - 1] = 0;
@@ -205,13 +259,21 @@ int main(int argc, char **argv)
         }
 
         case 'E':
-            if (cmd[i]) { printf("?\n"); break; }
+            if (cmd[i])
+            {
+                printf("?\n");
+                break;
+            }
             if (ed_save(&e) == 0)
                 return 0;
             break;
 
         case 'Q':
-            if (cmd[i]) { printf("?\n"); break; }
+            if (cmd[i])
+            {
+                printf("?\n");
+                break;
+            }
             if (e.modified)
             {
                 printf("Q-(Y/N)?");
@@ -224,7 +286,11 @@ int main(int argc, char **argv)
             return 0;
 
         default:
-            if (cmd[i]) { printf("?\n"); break; }
+            if (cmd[i])
+            {
+                printf("?\n");
+                break;
+            }
             if (has_from && !has_comma)
             {
                 if (from < 1 || from > e.num_lines)

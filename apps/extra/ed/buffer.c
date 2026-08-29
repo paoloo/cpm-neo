@@ -2,10 +2,14 @@
 
 void gap_move(Editor *e, int log_pos)
 {
-    if (log_pos < 0) log_pos = 0;
-    if (log_pos > e->logical_bytes) log_pos = e->logical_bytes;
+    if (log_pos < 0)
+        log_pos = 0;
+
+    if (log_pos > e->logical_bytes)
+        log_pos = e->logical_bytes;
 
     int old_gs = e->gap_start;
+
     int old_ge = e->gap_end;
 
     if (log_pos < old_gs)
@@ -26,12 +30,13 @@ void gap_move(Editor *e, int log_pos)
 
 int ed_put_line(Editor *e, int at, const char *text, int len)
 {
-    if (at < 0) at = 0;
-    if (at > e->num_lines) at = e->num_lines;
+    if (at < 0)
+        at = 0;
 
-    int insert_pos = (at >= e->num_lines)
-        ? e->logical_bytes
-        : e->line_off[at];
+    if (at > e->num_lines)
+        at = e->num_lines;
+
+    int insert_pos = (at >= e->num_lines) ? e->logical_bytes : e->line_off[at];
 
     gap_move(e, insert_pos);
 
@@ -39,14 +44,20 @@ int ed_put_line(Editor *e, int at, const char *text, int len)
         return -1;
 
     memcpy(e->buf + e->gap_start, text, len);
+
     e->buf[e->gap_start + len] = 0;
+
     e->gap_start += len + 1;
+
     e->logical_bytes += len + 1;
 
     for (int j = e->num_lines; j > at; j--)
         e->line_off[j] = e->line_off[j - 1] + len + 1;
+
     e->line_off[at] = insert_pos;
+
     e->num_lines++;
+
     return 0;
 }
 
@@ -56,6 +67,7 @@ void ed_insert(Editor *e, int line)
         line = e->num_lines;
 
     char in[LINE_LEN];
+
     int insert_line = line;
 
     for (;;)
@@ -100,13 +112,18 @@ void ed_insert(Editor *e, int line)
         if (stop)
             break;
     }
+
     e->cur = -1;
 }
 
 void ed_delete(Editor *e, int from, int to)
 {
-    if (from < 0) from = 0;
-    if (to >= e->num_lines) to = e->num_lines - 1;
+    if (from < 0)
+        from = 0;
+
+    if (to >= e->num_lines)
+        to = e->num_lines - 1;
+
     if (from > to)
     {
         printf("?RANGE\n");
@@ -114,19 +131,20 @@ void ed_delete(Editor *e, int from, int to)
     }
 
     int from_log = e->line_off[from];
-    int to_log = (to + 1 < e->num_lines)
-        ? e->line_off[to + 1]
-        : e->logical_bytes;
+    int to_log = (to + 1 < e->num_lines) ? e->line_off[to + 1] : e->logical_bytes;
     int del_len = to_log - from_log;
 
     gap_move(e, from_log);
 
     e->gap_end += del_len;
+
     e->logical_bytes -= del_len;
 
     int count = to - from + 1;
+
     for (int i = from; i < e->num_lines - count; i++)
         e->line_off[i] = e->line_off[i + count] - del_len;
+
     e->num_lines -= count;
 
     if (e->cur >= from)
@@ -136,5 +154,6 @@ void ed_delete(Editor *e, int from, int to)
         else
             e->cur -= count;
     }
+
     e->modified = 1;
 }

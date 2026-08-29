@@ -9,8 +9,8 @@
  * with an automatic fallback to A0: if not found on the current volume.
  */
 
-#include "ccp.h"
 #include "bdos.h"
+#include "ccp.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,6 +30,7 @@ static CmdErr dir_list(FsContext *ctx, int argc, char **argv, int show_sys)
     if (argc >= 2)
     {
         FileRef ref;
+
         if (!parse_fileref(ctx, argv[1], &ref))
             return cmderr_syntax(NULL);
 
@@ -38,17 +39,18 @@ static CmdErr dir_list(FsContext *ctx, int argc, char **argv, int show_sys)
         make_path(full_pat, (FsContext){vol, ua}, ref.name[0] ? ref.name : "*.*");
     }
     else
-    {
         make_path(full_pat, (FsContext){vol, ua}, "*.*");
-    }
 
     FileInfo di;
+
     int count = 0, col = 0, rc;
 
     uint8_t cw, ch;
+
     sys_consize(&cw, &ch);
 
     int ncols = cw / 20;
+
     if (ncols < 1)
         ncols = 1;
 
@@ -144,12 +146,15 @@ CmdErr cmd_user(FsContext *ctx, int argc, char **argv)
 static int exec_if_sys(const char *path, int argc, char **argv, int *out_rc)
 {
     FileInfo fi;
+
     if (find(path, &fi) != EOK)
         return 0;
+
     if (!(fi.attrib & FILE_ATTR_SYSTEM))
         return 0;
 
     *out_rc = exec(path, argc, argv);
+
     return 1;
 }
 
@@ -177,16 +182,20 @@ CmdErr try_implicit_run(FsContext *ctx, int argc, char **argv)
     if (rc == ENOENT && !strchr(argv[0], ':'))
     {
         char name[FILENAME_MAX];
+
         name_copy(name, argv[0], sizeof(name) - 1);
+
         if (!strchr(name, '.'))
             strncat(name, ".COM", sizeof(name) - strlen(name) - 1);
 
         char cand[ARG_LEN_MAX + 8];
 
         snprintf(cand, sizeof(cand), "%c0:%s", 'A' + ctx->vol_id, name);
+
         if (!exec_if_sys(cand, argc, argv, &rc) && ctx->vol_id != VOL_A)
         {
             snprintf(cand, sizeof(cand), "A0:%s", name);
+
             exec_if_sys(cand, argc, argv, &rc);
         }
     }

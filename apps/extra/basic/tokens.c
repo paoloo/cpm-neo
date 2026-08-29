@@ -1,11 +1,9 @@
 #include "basic.h"
 
-const char *lex_kw_names[] = {
-    "LET", "PRINT", "INPUT", "GOTO", "GOSUB", "RETURN",
-    "IF", "THEN", "FOR", "TO", "STEP", "NEXT", "END", "REM",
-    "AND", "OR",
-    "LIST", "LOAD", "RUN", "NEW", "POKE", "EXIT",
-    "PEEK", "ABS", "SGN", "RND", "DEF", "DIM", "FRE", "CLR", "SAVE"};
+const char *lex_kw_names[] = {"LET",  "PRINT", "INPUT", "GOTO", "GOSUB", "RETURN", "IF",   "THEN",
+                              "FOR",  "TO",    "STEP",  "NEXT", "END",   "REM",    "AND",  "OR",
+                              "LIST", "LOAD",  "RUN",   "NEW",  "POKE",  "EXIT",   "PEEK", "ABS",
+                              "SGN",  "RND",   "DEF",   "DIM",  "FRE",   "CLR",    "SAVE"};
 
 int lex_kw_id(const char *w)
 {

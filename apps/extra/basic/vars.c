@@ -49,11 +49,13 @@ int var_read_str(BasicState *s, char *buf)
         lex_next(s);
         return 1;
     }
+
     if (s->lex.type == T_VAR && s->lex.quote)
     {
         strcpy(buf, s->var.str[s->lex.num]);
         lex_next(s);
         return 1;
     }
+
     return 0;
 }

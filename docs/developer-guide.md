@@ -56,16 +56,62 @@ read (it is required, and may not be `NULL`).
 
 A platform is a self-contained `platform/<name>/` directory:
 
-1. `config.sh` declares the three platform facts:
+1. `config.sh` declares the platform facts:
    - `ARCH` — the ISA directory under `arch/` (selects the toolchain)
    - `IO_BASE` — base address of the peripheral MMIO window
    - `RAM_BASE` — base address of the RAM region holding CP/M Neo
+   - `ID` — the 8-char max platform id shown by the OS and stamped into
+     sector 0 (`S0_PLATFORM`). It is the platform's identity for `--platform`,
+     so it is required. The folder may be longer or use other characters,
+     e.g. `platform/blackpill-411fe/` with `ID="BPF411E"`.
 2. `bios.c` implements the functions in `bios.h`.
-3. Build with `sysgen new ... --platform=<name>`.
+3. Build with `sysgen new ... --platform=<id>`.
 
-Everything else (TPA base, kernel placement) is derived from these three
-values during the build, so a new board needs no changes to the kernel,
-linker scripts, or build logic.
+Everything else (TPA base, kernel placement) is derived from these values
+during the build, so a new board needs no changes to the kernel, linker
+scripts, or build logic.
+
+### Platform lookup
+
+`--platform` addresses a platform purely by its `ID`:
+
+- `build_disk.sh` scans every `platform/*/config.sh` and a platform matches
+  when its `ID` equals the argument;
+- an `ID` declared by more than one platform is an error
+  (`duplicate platform ID ...`);
+- an unmatched id fails with `unknown platform '<id>'`.
+
+The platform directory is a private filesystem location derived from the
+match; it is used only inside `build_disk.sh` (and, via the internal
+`.platform_dir` record, `app_build.sh`). The `ID` is what `--platform`
+selects, is written to sector 0 (`S0_PLATFORM`), and is shown by the OS. The
+two may differ.
+
+### Optional console & storage drivers
+
+`bios.c` may be split into driver files backed by two small abstractions in
+`platform/include/` (the kernel never sees them):
+
+- `frontend.h` — a `Frontend` table of function pointers for the console
+  device (UART, TFT_SPI, …): `init`, `conout`, `conin`, `constat`, `consize`.
+- `backend.h` — a `Backend` table for the disk device (internal flash, uSD,
+  …): `init`, `read`, `write`.
+
+A platform that uses them provides `frontend.c` and `backend.c`, and `bios.c`
+composes the tables locally (no shared globals):
+
+```c
+#include "frontend.h"
+#include "backend.h"
+
+static const Frontend console = { UART_init, UART_conout, UART_conin,
+                                  UART_constat, UART_consize };
+static const Backend disk = { FLASH_init, FLASH_read, FLASH_write };
+
+int bios_read(uint16_t lba, uint8_t *buf) { return disk.read(lba, buf); }
+```
+
+Simple platforms can implement `bios.c` directly.
 
 See [Architecture](architecture.md) for the boot and build flow.
 
