@@ -45,6 +45,7 @@ int strtoi(const char *nptr, char **endptr, int base)
         if (*p == '0')
         {
             p++;
+
             if (*p == 'x' || *p == 'X')
             {
                 base = 16;
@@ -60,9 +61,11 @@ int strtoi(const char *nptr, char **endptr, int base)
     }
 
     int ovf = 0;
+
     while (1)
     {
         int d;
+
         if (*p >= '0' && *p <= '9')
             d = *p - '0';
         else if (*p >= 'a' && *p <= 'f')

@@ -16,6 +16,7 @@ int var_aget(BasicState *s, int vn, int idx, int *v)
         ctl_error(s, "UNDIMENSIONED ARRAY");
         return -1;
     }
+
     if (idx < 0 || idx >= s->var.dim[vn])
     {
         ctl_error(s, "SUBSCRIPT OUT OF RANGE");
@@ -32,11 +33,13 @@ int var_aset(BasicState *s, int vn, int idx, int val)
         ctl_error(s, "UNDIMENSIONED ARRAY");
         return -1;
     }
+
     if (idx < 0 || idx >= s->var.dim[vn])
     {
         ctl_error(s, "SUBSCRIPT OUT OF RANGE");
         return -1;
     }
+
     s->var.arr[vn][idx] = val;
     return 0;
 }

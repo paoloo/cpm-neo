@@ -8,6 +8,7 @@ static char *ed_find_str(const char *s, const char *p)
     int plen = strlen(p);
 
     for (; *s; s++)
+
         if (*s == *p && strncmp(s, p, plen) == 0)
             return (char *)s;
 

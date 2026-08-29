@@ -170,7 +170,7 @@ echo "  Building bootloader..."
 $CC $CFLAGS $PLATFORM_INC -I core/kernel/ \
     -c "platform/$PLATFORM_DIR/bios.c" -o "$INT/boot_plat.o"
 $CC $CFLAGS -I arch/$ARCH/ -I core/kernel/ \
-    -Wl,--gc-sections -Wl,--strip-debug \
+    -Wl,--gc-sections -Wl,--strip-debug -Wl,--no-warn-rwx-segments \
     -Wl,--defsym=__io_base="$IO_BASE_HEX" \
     -Wl,--defsym=__mem_top="$KERN_CEIL_HEX" \
     -T arch/$ARCH/linker_boot.ld \
@@ -266,4 +266,3 @@ $OBJCOPY -O binary "$INT/ccp.elf" "$INT/ccp.bin"
 
 printf '%s' "$PLATFORM_DIR" > "$BUILD/.platform_dir"
 printf '%s' "$ID" > "$BUILD/.platform_id"
-printf '  Platform        : %s (ISA: %s)\n' "$PLATFORM_ID" "$ARCH"

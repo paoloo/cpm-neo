@@ -1,11 +1,7 @@
 ENTRY(_boot_start)
 
-/* __io_base and __mem_top are supplied externally via --defsym=, derived
- * by build_disk.sh from the platform config (__io_base = MMIO window base,
- * __mem_top = top of usable RAM). */
-
 MEMORY {
-    RAM (rx) : ORIGIN = 0x0000, LENGTH = 1024
+    RAM (rwx) : ORIGIN = 0x0000, LENGTH = 1024
 }
 
 SECTIONS {
@@ -16,20 +12,22 @@ SECTIONS {
         _boot_end = .;
     } > RAM
 
-    /DISCARD/ : { *(.comment) *(.eh_frame) *(.note*) }
+    .sbss (NOLOAD) : {
+        *(.sbss .sbss.*)
+        *(.scommon)
+        . = ALIGN(4);
+        _boot_bss_end = .;
+    } > RAM
+
+    /DISCARD/ : {
+        *(.comment)
+        *(.eh_frame)
+        *(.note*)
+    }
 }
 
-/* Volatile boot RAM packed right after the boot code, as low as possible:
- * a 512-byte sector-0 scratch buffer, then a 128-byte stack just above it.
- * Measured peak boot stack use is 8 bytes, so 128 B leaves a wide margin.
- * Symbolically derived from the code end so the layout hugs the real image
- * size and can never overlap the code.  Both are only used while booting;
- * the region is reused by the TPA once the kernel runs. */
-__boot_scratch    = ALIGN(_boot_end, 0x200); /* 512-aligned, 512 B sector-0 buffer */
-__boot_stack_top  = __boot_scratch + 0x280;  /* 128 B stack above the scratch      */
+__boot_scratch   = ALIGN(_boot_bss_end, 0x200);
+__boot_stack_top = __boot_scratch + 0x280;
 
-/* The volatile boot RAM is placed by symbol arithmetic, not by a section, so
- * the linker would never complain if it ran past the end of RAM.  Enforce the
- * invariant here: it must stay below the MMIO area at the top of memory. */
 ASSERT(__boot_stack_top <= __mem_top,
        "ERROR: boot scratch/stack reach top of usable RAM — image too large for this memory size")

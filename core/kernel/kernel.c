@@ -53,6 +53,7 @@ extern const SyscallTable g_syscall_table;
 static FsContext parse_prefix(const char **path_ptr)
 {
     FsContext ctx = g_kstate.fs_ctx;
+
     if (!path_ptr || !*path_ptr)
         return ctx;
 
@@ -61,7 +62,9 @@ static FsContext parse_prefix(const char **path_ptr)
     if (isalpha((unsigned char)p[0]))
     {
         int colon = -1;
+
         for (int i = 1; i <= 4 && p[i]; i++)
+
             if (p[i] == ':')
             {
                 colon = i;
@@ -72,12 +75,14 @@ static FsContext parse_prefix(const char **path_ptr)
             return ctx;
 
         ctx.vol_id = toupper((unsigned char)p[0]) - 'A';
+
         if (ctx.vol_id >= VOL_MAX)
             return ctx;
 
         if (colon > 1)
         {
             int ua = 0;
+
             for (int i = 1; i < colon; i++)
             {
                 if (p[i] < '0' || p[i] > '9')
@@ -85,8 +90,10 @@ static FsContext parse_prefix(const char **path_ptr)
 
                 ua = ua * 10 + (p[i] - '0');
             }
+
             if (ua > USER_AREA_MAX)
                 return ctx;
+
             ctx.user_area = (uint8_t)ua;
         }
 
@@ -98,6 +105,7 @@ static FsContext parse_prefix(const char **path_ptr)
     {
         char *ep;
         int ua = strtoi(p, &ep, 10);
+
         if (ep > p && *ep == ':' && ua >= 0 && ua <= USER_AREA_MAX)
         {
             ctx.user_area = (uint8_t)ua;
@@ -141,11 +149,13 @@ static int make_name83(const char *src, char *out)
      * ('.') or end of input.  Unspecified fields stay blank, and blanks
      * match only blanks during directory searches. */
     int i = 0;
+
     while (i < nbase && src[i] != '*')
     {
         out[i] = toupper((unsigned char)src[i]);
         i++;
     }
+
     if (i < nbase)
         memset(out + i, '?', NAME83_BASE - i);
 
@@ -153,12 +163,14 @@ static int make_name83(const char *src, char *out)
     {
         const char *q = dot + 1;
         int e = 0;
+
         while (e < NAME83_EXT && *q && *q != '.' && *q != '*')
         {
             out[NAME83_BASE + e] = toupper((unsigned char)*q);
             e++;
             q++;
         }
+
         if (*q == '*' && e < NAME83_EXT)
             memset(out + NAME83_BASE + e, '?', NAME83_EXT - e);
     }
@@ -195,6 +207,7 @@ int kernel_init(void)
 int kexec(const char *name83, int argc, char **argv, FsContext ctx)
 {
     int fd = bd_open(name83, ctx, 0);
+
     if (fd < 0)
         return fd;
 
@@ -229,15 +242,18 @@ int kexec(const char *name83, int argc, char **argv, FsContext ctx)
 
     uint8_t *dest = (uint8_t *)__tpa_base;
     uint32_t remaining = file_size;
+
     while (remaining > 0)
     {
         uint16_t chunk = (remaining > USHRT_MAX) ? USHRT_MAX : (uint16_t)remaining;
         int n = bd_read(fd, dest, chunk);
+
         if (n <= 0)
         {
             bd_close(fd);
             return EIO;
         }
+
         dest += (uint32_t)n;
         remaining -= (uint32_t)n;
     }
@@ -262,15 +278,18 @@ void kexec_ccp(void)
     g_kstate.kenv.is_ccp = 1;
 
     uint8_t s0[DISK_SECTOR_SIZE];
+
     if (bios_read(0, s0) != 0)
         goto err;
 
     uint16_t lba = *(uint16_t *)(s0 + S0_CCP_LBA);
     uint16_t nsecs = *(uint16_t *)(s0 + S0_CCP_SIZE);
+
     if (nsecs == 0)
         goto err;
 
     for (uint16_t i = 0; i < nsecs; i++)
+
         if (bios_read(lba + i, (void *)((uintptr_t)__tpa_base + i * DISK_SECTOR_SIZE)))
             goto err;
 
@@ -278,6 +297,7 @@ void kexec_ccp(void)
 
 err:
     puts("  CCP ERR");
+
     while (1)
         ;
 }
@@ -287,6 +307,7 @@ int sys_open(const char *name, uint8_t writable)
     FsContext ctx = parse_prefix(&name);
     char n83[12];
     int err = make_name83(name, n83);
+
     if (err != EOK)
         return err;
 
@@ -301,9 +322,10 @@ int sys_read(int fd, void *buf, uint32_t len)
     if (fd_is_stdin(fd))
     {
         if (len == 0)
-            return bios_const();
+            return bios_constat();
 
         uint32_t i = 0;
+
         while (i < len)
         {
             p[i++] = (uint8_t)bios_conin();
@@ -314,17 +336,21 @@ int sys_read(int fd, void *buf, uint32_t len)
 
     int kfd = resolve_file_fd(fd);
     uint32_t total = 0;
+
     while (total < len)
     {
         uint16_t chunk = (len - total > 0xFFFFu) ? 0xFFFFu : (uint16_t)(len - total);
         int r = bd_read(kfd, p + total, chunk);
+
         if (r < 0)
             return total ? (int)total : r;
 
         total += (uint32_t)r;
+
         if ((uint16_t)r < chunk)
             break;
     }
+
     return (int)total;
 }
 
@@ -344,14 +370,17 @@ int sys_write(int fd, const void *buf, uint32_t len)
 
     int kfd = resolve_file_fd(fd);
     uint32_t total = 0;
+
     while (total < len)
     {
         uint16_t chunk = (len - total > 0xFFFFu) ? 0xFFFFu : (uint16_t)(len - total);
         int w = bd_write(kfd, p + total, chunk);
+
         if (w < 0)
             return total ? (int)total : w;
 
         total += (uint32_t)w;
+
         if ((uint16_t)w < chunk)
             break;
     }
@@ -430,6 +459,7 @@ int sys_rename(const char *old, const char *new)
     FsContext nctx = parse_prefix(&new);
 
     /* Renames are only meaningful within one volume and user area. */
+
     if (octx.vol_id != nctx.vol_id || octx.user_area != nctx.user_area)
         return EINVAL;
 
@@ -601,6 +631,7 @@ int sys_setctx(FsContext ctx)
     if (ctx.vol_id != g_kstate.fs_ctx.vol_id)
     {
         int rc = bd_bind(ctx.vol_id);
+
         if (rc != EOK)
             return rc;
     }

@@ -60,6 +60,7 @@ static int tokenise(char *line, char *argv[], int max)
             break;
 
         argv[argc++] = p;
+
         while (*p && *p != ' ')
             p++;
 
@@ -80,6 +81,7 @@ static CmdErr try_ctx_switch(const char *tok)
     if (isalpha((unsigned char)tok[0]))
     {
         cp = 1;
+
         while (isdigit((unsigned char)tok[cp]))
             cp++;
 
@@ -87,6 +89,7 @@ static CmdErr try_ctx_switch(const char *tok)
             return cmderr_syntax(NULL);
 
         int8_t idx = (int8_t)(toupper((unsigned char)tok[0]) - 'A');
+
         if (idx >= VOL_MAX)
             return cmderr_bdos(idx, EINVAL);
 
@@ -96,6 +99,7 @@ static CmdErr try_ctx_switch(const char *tok)
     else if (isdigit((unsigned char)tok[0]))
     {
         cp = 0;
+
         while (tok[cp] >= '0' && tok[cp] <= '9')
             cp++;
 
@@ -113,6 +117,7 @@ static CmdErr try_ctx_switch(const char *tok)
     {
         char *ep;
         int ua = strtoi(digits, &ep, 10);
+
         if (ep != tok + cp || ua < 0 || ua > USER_AREA_MAX)
         {
             g_ctx.vol_id = old_vol; /* undo the vol_id set above, if any */
@@ -123,6 +128,7 @@ static CmdErr try_ctx_switch(const char *tok)
     }
 
     int rc = fs_setctx(g_ctx);
+
     if (rc != EOK)
     {
         int8_t err_vol = g_ctx.vol_id;
@@ -159,6 +165,7 @@ void try_run_batch(FsContext *ctx)
         uint32_t offset = sys_getenv(ENV_BATCH_OFFSET);
 
         int fd = open(batch_path, "r");
+
         if (fd < 0)
         {
             sys_setenv(ENV_BATCH_OFFSET, 0);
@@ -168,6 +175,7 @@ void try_run_batch(FsContext *ctx)
         lseek(fd, offset, SEEK_SET);
 
         int n = readline(fd, g_buf.input, sizeof(g_buf.input));
+
         if (n <= 0)
         {
             close(fd);
@@ -186,6 +194,7 @@ void try_run_batch(FsContext *ctx)
         {
             if ((int)sys_getenv(ENV_RETURN_CODE) != 0)
                 continue;
+
             memmove(g_buf.input, g_buf.input + 1, CCP_LINE_MAX - 1);
         }
 
@@ -242,6 +251,7 @@ CmdErr ccp_dispatch(char *line)
     if (e)
     {
         CmdErr se = e->fn(&g_ctx, argc, g_buf.argv);
+
         if (se.err_code != 0)
             cmderr_print(se);
 

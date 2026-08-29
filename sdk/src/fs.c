@@ -176,6 +176,7 @@ int find(const char *name, FileInfo *out)
 int find_next(const char *pattern, FileInfo *out)
 {
     int pos = sys_findfile(pattern, out, g_find_pos);
+
     if (pos > 0)
     {
         g_find_pos = pos;

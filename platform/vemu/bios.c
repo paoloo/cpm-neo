@@ -64,7 +64,7 @@ void bios_conout(int c)
     MMIO_W8(DSP_DATA, c);
 }
 
-int bios_const(void)
+int bios_constat(void)
 {
     return MMIO_R32(KBD_STAT) ? 0xFF : 0;
 }
@@ -72,6 +72,7 @@ int bios_const(void)
 int bios_conin(void)
 {
     int c;
+
     while ((c = MMIO_R32(KBD_DATA)) == 0)
         ;
     return c;
@@ -97,6 +98,7 @@ int bios_write(uint16_t lba, const uint8_t *buf)
 {
     int rc = dma_transfer((uint16_t)DISK_BUFFER, (uint16_t)(uintptr_t)buf, DISK_SECTOR_SIZE,
                           DMA_DISK_WR);
+
     if (rc != 0)
         return rc;
 

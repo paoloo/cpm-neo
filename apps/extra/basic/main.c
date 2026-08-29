@@ -135,6 +135,7 @@ static int exec_direct(BasicState *s)
 
         return 1;
     }
+
     case K_RUN:
         prog_run(s);
         return 1;
@@ -177,23 +178,27 @@ static int exec_direct(BasicState *s)
             int num = (unsigned char)p[0] | ((unsigned char)p[1] << 8);
             pos += snprintf(line_buf + pos, sizeof(line_buf) - pos, "%d ", num);
             p += 2;
+
             while (*p && pos < (int)sizeof(line_buf) - 2)
             {
                 if ((unsigned char)*p >= TOK_BASE)
                 {
                     const char *kw = lex_kw_names[(unsigned char)*p - TOK_BASE];
                     int klen = strlen(kw);
+
                     if (pos + klen + 1 < (int)sizeof(line_buf))
                     {
                         memcpy(line_buf + pos, kw, klen);
                         pos += klen;
                         line_buf[pos++] = ' ';
                     }
+
                     p++;
                 }
                 else
                     line_buf[pos++] = *p++;
             }
+
             while (*p)
                 p++;
             p++;
@@ -205,6 +210,7 @@ static int exec_direct(BasicState *s)
 
         return 1;
     }
+
     case K_EXIT:
         return -1;
     default:

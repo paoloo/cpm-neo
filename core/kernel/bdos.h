@@ -63,6 +63,12 @@
 #define BD_ENTRY_DELETED       0xE5
 
 #define BD_USER_INVALID        0xFF
+#define BD_HEADER_SECS         1
+#define BD_BITS_PER_BYTE       8
+#define BD_BITMAP_FULL         UINT8_MAX
+#define BD_RESERVED_BLOCK      0
+#define BD_SECTORS_PER_KB      (1024 / DISK_SECTOR_SIZE)
+#define DIR_SCAN_STOP          1
 
 /*
  * Bind an existing formatted volume.  Closes stale FCBs from any

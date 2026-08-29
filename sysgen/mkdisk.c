@@ -28,6 +28,7 @@ static uint32_t kernel_sectors(uint32_t kern_size)
 {
     uint32_t num_kern_sects = (kern_size + DISK_SECTOR_SIZE - 1) / DISK_SECTOR_SIZE;
     uint32_t padding = num_kern_sects * DISK_SECTOR_SIZE - kern_size;
+
     if (padding < 4)
         num_kern_sects++;
     return num_kern_sects;
@@ -78,6 +79,7 @@ int elf32_symbol(const uint8_t *e, size_t n, const char *name, uint32_t *value)
     uint32_t shoff = read32(e + 32);
     uint16_t shentsize = read16(e + 46);
     uint16_t shnum = read16(e + 48);
+
     if (shentsize != 40 || shnum == 0 || shoff == 0)
         return -1;
 
@@ -90,12 +92,14 @@ int elf32_symbol(const uint8_t *e, size_t n, const char *name, uint32_t *value)
     for (uint16_t i = 0; i < shnum; i++)
     {
         const uint8_t *sh = e + shoff + (uint32_t)i * 40;
+
         if (read32(sh + 4) == 2) /* SHT_SYMTAB */
         {
             sym_off = read32(sh + 16);
             sym_size = read32(sh + 20);
             sym_entsize = read32(sh + 36);
             uint16_t link = read16(sh + 24);
+
             if (link < shnum)
             {
                 const uint8_t *st = e + shoff + (uint32_t)link * 40;
@@ -115,9 +119,11 @@ int elf32_symbol(const uint8_t *e, size_t n, const char *name, uint32_t *value)
         const uint8_t *sym = e + sym_off + i;
         uint32_t st_name = read32(sym);
         uint32_t st_value = read32(sym + 4);
+
         if (st_name < str_size)
         {
             const char *nm = (const char *)(e + str_off + st_name);
+
             if (strcmp(nm, name) == 0)
             {
                 *value = st_value;
@@ -125,6 +131,7 @@ int elf32_symbol(const uint8_t *e, size_t n, const char *name, uint32_t *value)
             }
         }
     }
+
     return -1;
 }
 
@@ -141,6 +148,7 @@ void to_name83(const char *src, char *out83)
 {
     char tmp[64];
     int n = 0;
+
     while (src[n] && n < 63)
     {
         char c = src[n];
@@ -149,6 +157,7 @@ void to_name83(const char *src, char *out83)
     }
 
     tmp[n] = '\0';
+
     while (n > 0 && (tmp[n - 1] == ' ' || tmp[n - 1] == '\t'))
         tmp[--n] = '\0';
 
@@ -157,20 +166,24 @@ void to_name83(const char *src, char *out83)
     memset(ext, ' ', NAME83_EXT);
 
     const char *dot = strchr(tmp, '.');
+
     if (dot)
     {
         int b = (int)(dot - tmp);
+
         if (b > NAME83_BASE)
             b = NAME83_BASE;
         memcpy(base, tmp, (size_t)b);
         int e = 0;
         const char *p = dot + 1;
+
         while (e < NAME83_EXT && *p)
             ext[e++] = *p++;
     }
     else
     {
         int b = n;
+
         if (b > NAME83_BASE)
             b = NAME83_BASE;
         memcpy(base, tmp, (size_t)b);
@@ -184,11 +197,13 @@ void to_name83(const char *src, char *out83)
 int read_file(const char *path, uint8_t **out, uint32_t *out_len)
 {
     FILE *f = fopen(path, "rb");
+
     if (!f)
         return -1;
 
     fseek(f, 0, SEEK_END);
     long sz = ftell(f);
+
     if (sz < 0 || (unsigned long)sz > (unsigned long)UINT32_MAX)
     {
         fclose(f);
@@ -197,6 +212,7 @@ int read_file(const char *path, uint8_t **out, uint32_t *out_len)
 
     fseek(f, 0, SEEK_SET);
     uint8_t *buf = (uint8_t *)malloc((sz > 0) ? (size_t)sz : 1);
+
     if (!buf)
     {
         fclose(f);
@@ -204,6 +220,7 @@ int read_file(const char *path, uint8_t **out, uint32_t *out_len)
     }
 
     size_t r = fread(buf, 1, (size_t)sz, f);
+
     if (r != (size_t)sz)
     {
         free(buf);
@@ -220,11 +237,13 @@ int read_file(const char *path, uint8_t **out, uint32_t *out_len)
 int write_file(const char *path, const uint8_t *data, uint32_t len)
 {
     FILE *f = fopen(path, "wb");
+
     if (!f)
         return -1;
 
     size_t w = fwrite(data, 1, (size_t)len, f);
     int rc = fclose(f);
+
     if (w != (size_t)len)
         return -1;
 
@@ -258,10 +277,12 @@ int mkdisk_build(uint32_t size_kb, const uint8_t *kern, uint32_t kern_size, cons
 
     uint32_t block_base = (uint32_t)KERN_START_LBA + reserved;
     uint32_t num_blocks = (total_secs - block_base) / BD_BLOCK_SECS;
+
     if (num_blocks == 0)
         return -1;
 
     uint8_t *disk = (uint8_t *)calloc(total_secs * DISK_SECTOR_SIZE, 1);
+
     if (!disk)
         return -1;
 
@@ -295,6 +316,7 @@ int mkdisk_build(uint32_t size_kb, const uint8_t *kern, uint32_t kern_size, cons
     write32(disk + (uint32_t)KERN_START_LBA * DISK_SECTOR_SIZE + kern_sect_bytes - 4, BOOT_MAGIC);
 
     /* ── CCP raw binary ────────────────────────────────────── */
+
     if (ccp_size > 0)
     {
         uint32_t clba = (uint32_t)KERN_START_LBA + num_kern_sects;
@@ -316,6 +338,7 @@ int mkdisk_build(uint32_t size_kb, const uint8_t *kern, uint32_t kern_size, cons
     uint32_t base = num_blocks / VOL_MAX;
     uint32_t rem = num_blocks % VOL_MAX;
     uint32_t min_blocks = min_viable_blocks();
+
     if (base < min_blocks)
         return -1; /* disk too small to give every volume a viable block count */
 
@@ -332,6 +355,7 @@ int mkdisk_build(uint32_t size_kb, const uint8_t *kern, uint32_t kern_size, cons
         /* Reserve at most BD_VOL_MAX_BLOCKS at the disk layer for this
          * volume. The remainder of its equal share, if any, is simply
          * not claimed by any extent and stays free in the grid. */
+
         if (count > BD_VOL_MAX_BLOCKS)
             count = BD_VOL_MAX_BLOCKS;
 
@@ -348,6 +372,7 @@ int mkdisk_build(uint32_t size_kb, const uint8_t *kern, uint32_t kern_size, cons
         /* count is already <= BD_VOL_MAX_BLOCKS above, and num_data <=
          * count after subtracting the header/root overhead, so this can
          * no longer fire -- kept as a defensive backstop only. */
+
         if (num_data > BD_VOL_MAX_BLOCKS)
             num_data = BD_VOL_MAX_BLOCKS;
 

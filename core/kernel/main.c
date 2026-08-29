@@ -37,6 +37,7 @@ void os_entry(void)
     if (kernel_init() != EOK)
     {
         puts(" \nVOL ERR");
+
         while (1)
             ;
     }
@@ -48,6 +49,7 @@ void os_entry(void)
 void __attribute__((used, noinline)) _start(void)
 {
     os_entry();
+
     for (;;)
         ;
 }

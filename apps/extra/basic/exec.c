@@ -222,6 +222,7 @@ static void exec_print(BasicState *s)
         else if (s->lex.type != T_EOF)
         {
             int v = expr_eval(s);
+
             if (s->ctl.stopped)
                 break;
             printf("%d", v);

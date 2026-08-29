@@ -55,6 +55,7 @@ static CmdErr dir_list(FsContext *ctx, int argc, char **argv, int show_sys)
         ncols = 1;
 
     find_reset();
+
     while ((rc = find_next(full_pat, &di)) == EOK)
     {
         int show_file = ((di.attrib & FILE_ATTR_SYSTEM) != 0) == show_sys;
@@ -126,6 +127,7 @@ CmdErr cmd_user(FsContext *ctx, int argc, char **argv)
         return cmderr_syntax(NULL);
 
     int ua;
+
     if (!parse_int(argv[1], &ua))
         return cmderr_syntax(NULL);
 
@@ -133,6 +135,7 @@ CmdErr cmd_user(FsContext *ctx, int argc, char **argv)
         return cmderr_syntax(argv[1]);
 
     int rc = ccp_setuser(ctx, ua);
+
     if (rc != EOK)
         return cmderr_bdos(ctx->vol_id, rc);
 

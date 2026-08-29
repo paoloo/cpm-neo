@@ -39,7 +39,7 @@ $ ./sysgen/build/sysgen add hello.txt --dst=A0 --attr=RW
 | `int bios_init(void)` | Initialize hardware; 0 on success |
 | `void bios_conout(int c)` | Write a character to the console |
 | `int bios_conin(void)` | Blocking console read |
-| `int bios_const(void)` | Console status (0xFF = key ready) |
+| `int bios_constat(void)` | Console status (0xFF = key ready) |
 | `void bios_consize(uint8_t *cw, uint8_t *ch)` | Console dimensions |
 | `int bios_read(uint16_t lba, uint8_t *buf)` | Read one 512-byte sector |
 | `int bios_write(uint16_t lba, const uint8_t *buf)` | Write one sector |
@@ -87,31 +87,29 @@ match; it is used only inside `build_disk.sh` (and, via the internal
 selects, is written to sector 0 (`S0_PLATFORM`), and is shown by the OS. The
 two may differ.
 
-### Optional console & storage drivers
+### The BIOS contract
 
-`bios.c` may be split into driver files backed by two small abstractions in
-`platform/include/` (the kernel never sees them):
+Each platform implements the functions declared in `core/kernel/bios.h`
+(console: `bios_conout`, `bios_conin`, `bios_constat`, `bios_consize`,
+`bios_init`; storage: `bios_read`, `bios_write`; time: `bios_time`) directly in
+`bios.c`. The kernel contract is a fixed set of functions — no abstractions in
+between.
 
-- `frontend.h` — a `Frontend` table of function pointers for the console
-  device (UART, TFT_SPI, …): `init`, `conout`, `conin`, `constat`, `consize`.
-- `backend.h` — a `Backend` table for the disk device (internal flash, uSD,
-  …): `init`, `read`, `write`.
-
-A platform that uses them provides `frontend.c` and `backend.c`, and `bios.c`
-composes the tables locally (no shared globals):
+A platform that supports several storage devices can select one at build time
+inside the storage functions:
 
 ```c
-#include "frontend.h"
-#include "backend.h"
-
-static const Frontend console = { UART_init, UART_conout, UART_conin,
-                                  UART_constat, UART_consize };
-static const Backend disk = { FLASH_init, FLASH_read, FLASH_write };
-
-int bios_read(uint16_t lba, uint8_t *buf) { return disk.read(lba, buf); }
+int bios_read(uint16_t lba, uint8_t *buf)
+{
+#ifdef USE_SDCARD
+    return sdcard_read(lba, buf);
+#else
+    return flash_read(lba, buf);
+#endif
+}
 ```
 
-Simple platforms can implement `bios.c` directly.
+Driver code may be organized within `bios.c` however the platform likes.
 
 See [Architecture](architecture.md) for the boot and build flow.
 

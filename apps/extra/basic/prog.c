@@ -3,35 +3,43 @@
 void tokenize_line(char *dst, unsigned max_dst, const char *src)
 {
     unsigned n = 0;
+
     while (*src && n + 1 < max_dst)
     {
         if (*src == '"')
         {
             *dst++ = *src++;
             n++;
+
             while (*src && *src != '"' && n + 1 < max_dst)
             {
                 *dst++ = *src++;
                 n++;
             }
+
             if (*src == '"' && n + 1 < max_dst)
             {
                 *dst++ = *src++;
                 n++;
             }
+
             continue;
         }
+
         if (isalpha(*src))
         {
             char word[64];
             int i = 0;
+
             while (i < 63 && src[i] && isalpha(src[i]))
             {
                 word[i] = toupper(src[i]);
                 i++;
             }
+
             word[i] = 0;
             int kw = lex_kw_id(word);
+
             if (kw >= 0)
             {
                 if (n + 1 >= max_dst)
@@ -39,6 +47,7 @@ void tokenize_line(char *dst, unsigned max_dst, const char *src)
                 *dst++ = (unsigned char)(TOK_BASE + kw);
                 n++;
                 src += i;
+
                 if (kw == K_REM)
                 {
                     while (*src && n + 1 < max_dst)
@@ -59,8 +68,10 @@ void tokenize_line(char *dst, unsigned max_dst, const char *src)
                 n += i;
                 src += i;
             }
+
             continue;
         }
+
         if (n + 1 >= max_dst)
             break;
         *dst++ = *src++;
@@ -72,6 +83,7 @@ void tokenize_line(char *dst, unsigned max_dst, const char *src)
 char *entry_next(char *p)
 {
     p += 2;
+
     while (*p)
         p++;
     return p + 1;
@@ -80,13 +92,16 @@ char *entry_next(char *p)
 char *prog_find_line(BasicState *s, int n)
 {
     char *p = s->prog.data;
+
     while (p < s->prog.free)
     {
         int num = (unsigned char)p[0] | ((unsigned char)p[1] << 8);
+
         if (num == n)
             return p;
         p = entry_next(p);
     }
+
     return NULL;
 }
 
@@ -125,6 +140,7 @@ void prog_add_line(BasicState *s, int n, const char *t)
     while (ins < s->prog.free)
     {
         int num = (unsigned char)ins[0] | ((unsigned char)ins[1] << 8);
+
         if (num > n)
             break;
         prev = entry_next(ins);
@@ -165,6 +181,7 @@ void prog_list(BasicState *s)
         int num = (unsigned char)p[0] | ((unsigned char)p[1] << 8);
         printf("%d ", num);
         const char *text = p + 2;
+
         while (*text)
         {
             if ((unsigned char)*text >= TOK_BASE)
@@ -175,12 +192,15 @@ void prog_list(BasicState *s)
             else
                 putchar(*text++);
         }
+
         printf("\n");
+
         if (anykey("...", &rows, ch))
         {
             printf("\n");
             break;
         }
+
         p = entry_next(p);
     }
 }
@@ -226,6 +246,7 @@ void prog_run(BasicState *s)
     }
 
     /* RUN clears variables but keeps DEF FN definitions (classic BASIC). */
+
     for (int i = 0; i < NVARS; i++)
     {
         s->var.val[i] = 0;

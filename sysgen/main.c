@@ -61,6 +61,7 @@ int main(int argc, char **argv)
     sysgen_init_paths(argv[0]);
 
     const char *cmd = argv[1];
+
     if (!strcmp(cmd, "-h") || !strcmp(cmd, "--help") || !strcmp(cmd, "help"))
     {
         usage();

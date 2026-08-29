@@ -92,6 +92,7 @@ static CmdErr cmd_copy(FsContext *ctx, int argc, char **argv)
     /* The kernel uppercases all stored names, so compare insensitively:
      * "COPY foo.txt FOO.TXT" would otherwise pass this guard and the
      * create-by-rename in open("w") would destroy the source mid-copy. */
+
     if (src.fs_ctx.vol_id == dst.fs_ctx.vol_id && src.fs_ctx.user_area == dst.fs_ctx.user_area &&
         !strcasecmp(src.name, dst.name))
         return cmderr_syntax(NULL);

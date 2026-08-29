@@ -63,8 +63,8 @@ See the [User Guide](docs/user-guide.md) for the full build and execution walkth
 | `ren <old> <new> [Vn]` | Rename a file |
 | `stat` | Show volume usage and metadata |
 
-Platforms are defined in `platform/<name>/`: `config.sh` plus `bios.c`, with
-optional `frontend.c`/`backend.c` driver files.
+Platforms are defined in `platform/<name>/`: `config.sh` plus `bios.c`
+implementing the console and storage functions from `core/kernel/bios.h`.
 
 See the [Developer Guide](docs/developer-guide.md) to add your own.
 

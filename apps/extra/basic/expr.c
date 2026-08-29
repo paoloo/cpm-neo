@@ -223,14 +223,19 @@ static int rel(BasicState *s)
 
         if (op0 == '=' && !op1)
             return v == r;
+
         if (op0 == '<' && !op1)
             return v < r;
+
         if (op0 == '>' && !op1)
             return v > r;
+
         if (op0 == '<' && op1 == '=')
             return v <= r;
+
         if (op0 == '>' && op1 == '=')
             return v >= r;
+
         if (op0 == '<' && op1 == '>')
             return v != r;
     }

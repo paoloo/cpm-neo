@@ -9,6 +9,7 @@ static CmdErr cmd_sys(FsContext *ctx, int argc, char **argv)
         return cmderr_syntax(NULL);
 
     SysInfo si;
+
     if (sys_info(&si) != EOK)
         return cmderr_bdos(ctx->vol_id, EIO);
 
@@ -22,6 +23,7 @@ static CmdErr cmd_sys(FsContext *ctx, int argc, char **argv)
 
     printf("    Vols     [");
     int mounted = 0;
+
     for (int v = 0; v < VOL_MAX; v++)
     {
         if (!si.vol_mounted[v])
@@ -30,6 +32,7 @@ static CmdErr cmd_sys(FsContext *ctx, int argc, char **argv)
         printf("%s%c:", mounted ? ", " : "", 'A' + v);
         mounted = 1;
     }
+
     printf("]\n");
 
     return cmderr_ok();

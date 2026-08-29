@@ -78,6 +78,7 @@ void ed_insert(Editor *e, int line)
             printf("     : ");
 
         int i = 0, c;
+
         while ((c = getchar()) != '\n' && c != '\r' && c != CH_EOF && c >= 0)
         {
             if ((c == '\b' || c == 0x7F) && i > 0)
@@ -93,6 +94,7 @@ void ed_insert(Editor *e, int line)
                 putchar(c);
             }
         }
+
         in[i] = 0;
         putchar('\n');
 
@@ -106,6 +108,7 @@ void ed_insert(Editor *e, int line)
             printf("?FULL\n");
             break;
         }
+
         e->modified = 1;
         insert_line++;
 

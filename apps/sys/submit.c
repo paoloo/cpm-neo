@@ -25,6 +25,7 @@ static int sub_resolve_ext(char *name)
 static int subst_params(char *dst, int dst_sz, const char *src, int argc, char **argv)
 {
     int di = 0;
+
     for (int si = 0; src[si] && di < dst_sz - 1;)
     {
         if (src[si] == '$')
@@ -33,12 +34,15 @@ static int subst_params(char *dst, int dst_sz, const char *src, int argc, char *
             {
                 int n = src[si + 1] - '0';
                 int idx = n + 1;
+
                 if (idx < argc)
                 {
                     const char *param = argv[idx];
+
                     while (*param && di < dst_sz - 1)
                         dst[di++] = *param++;
                 }
+
                 si += 2;
             }
             else if (src[si + 1] == '$')

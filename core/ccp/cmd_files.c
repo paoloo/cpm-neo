@@ -50,6 +50,7 @@ static void ren_pattern_match(const char *src_pat, const char *matched, RenMatch
         if (*sp == '*')
         {
             sp++;
+
             while (*sp == '*' || *sp == '?')
                 sp++;
 
@@ -61,10 +62,12 @@ static void ren_pattern_match(const char *src_pat, const char *matched, RenMatch
                     rm->seg_len[rm->nseg] = (int)strlen(mp);
                     rm->nseg++;
                 }
+
                 break;
             }
 
             const char *found = strchr(mp, *sp);
+
             if (!found)
                 break;
 
@@ -74,6 +77,7 @@ static void ren_pattern_match(const char *src_pat, const char *matched, RenMatch
                 rm->seg_len[rm->nseg] = (int)(found - mp);
                 rm->nseg++;
             }
+
             mp = found;
         }
         else
@@ -115,6 +119,7 @@ static void ren_pattern_format(const char *dst_pat, const RenMatch *rm, char *ou
             {
                 int len = rm->seg_len[seg_idx];
                 const char *s = rm->seg_start[seg_idx];
+
                 for (int i = 0; i < len && o < out_sz - 1; i++)
                     out[o++] = s[i];
                 seg_idx++;
@@ -124,6 +129,7 @@ static void ren_pattern_format(const char *dst_pat, const RenMatch *rm, char *ou
         {
             /* '?' consumes captured characters in match order, not by
              * absolute position in the destination pattern. */
+
             if (q_idx < rm->npos)
                 out[o++] = rm->pos_map[q_idx];
             q_idx++;
@@ -163,8 +169,10 @@ CmdErr cmd_era(FsContext *ctx, int argc, char **argv)
         char full[FSPATH_MAX];
         make_path(full, ref.fs_ctx, di.name);
         int rc = remove(full);
+
         if (rc != EOK)
             return cmderr_bdos(ref.fs_ctx.vol_id, rc);
+
         found = 1;
     }
 
@@ -246,6 +254,7 @@ CmdErr cmd_type(FsContext *ctx, int argc, char **argv)
         return cmderr_syntax(NULL);
 
     int fd = open(argv[1], "r");
+
     if (fd < 0)
         return cmderr_bdos(vol_from_arg(argv[1], ctx->vol_id), fd);
 
@@ -271,6 +280,7 @@ CmdErr cmd_type(FsContext *ctx, int argc, char **argv)
                 putchar((char)c);
 
                 int is_newline = (c == '\n');
+
                 if (c >= 0x20 && ++col >= pg.cols)
                     is_newline = 1;
 

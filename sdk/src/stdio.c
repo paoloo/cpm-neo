@@ -64,6 +64,7 @@ int getline(char *buf, int maxlen)
                     next2 = getchar();
                 } while (next2 != EOF && !isalpha((char)next2) && next2 != '~');
             }
+
             continue;
         }
 
@@ -76,6 +77,7 @@ int getline(char *buf, int maxlen)
                 putchar(' ');
                 putchar('\b');
             }
+
             continue;
         }
 
@@ -260,6 +262,7 @@ static int do_vprintf(Writer *w, const char *fmt, va_list ap)
             left = 1;
             fmt++;
         }
+
         if (*fmt == '0')
         {
             zpad = 1;
@@ -274,6 +277,7 @@ static int do_vprintf(Writer *w, const char *fmt, va_list ap)
         }
 
         char spec = *fmt;
+
         if (!spec)
             break;
 
@@ -285,17 +289,21 @@ static int do_vprintf(Writer *w, const char *fmt, va_list ap)
             w_puts_n(w, &c, 1, width, left);
             break;
         }
+
         case 's':
         {
             const char *s = va_arg(ap, const char *);
+
             if (!s)
                 s = "(null)";
             int len = 0;
+
             while (s[len])
                 len++;
             w_puts_n(w, s, len, width, left);
             break;
         }
+
         case 'd':
         case 'i':
         {
@@ -315,12 +323,14 @@ static int do_vprintf(Writer *w, const char *fmt, va_list ap)
             emit_num(w, p, width, left, zpad);
             break;
         }
+
         case 'u':
         {
             char *p = fmt_uint(tmp + sizeof(tmp), va_arg(ap, uint32_t), 10, 0);
             emit_num(w, p, width, left, zpad);
             break;
         }
+
         case 'x':
         case 'X':
         {
@@ -328,6 +338,7 @@ static int do_vprintf(Writer *w, const char *fmt, va_list ap)
             emit_num(w, p, width, left, zpad);
             break;
         }
+
         case '%':
             w_putc(w, '%');
             break;

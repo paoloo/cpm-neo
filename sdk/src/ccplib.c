@@ -15,6 +15,7 @@
 static int find_vol_colon(const char *arg)
 {
     for (int i = 1; i <= 4 && arg[i]; i++)
+
         if (arg[i] == ':')
             return i;
     return -1;
@@ -43,6 +44,7 @@ int parse_fileref(FsContext *ctx, const char *arg, FileRef *out)
         if (cp > 0)
         {
             out->fs_ctx.vol_id = toupper((unsigned char)arg[0]) - 'A';
+
             if (out->fs_ctx.vol_id >= VOL_MAX)
                 return 0;
 
@@ -50,6 +52,7 @@ int parse_fileref(FsContext *ctx, const char *arg, FileRef *out)
             {
                 char *ep;
                 int ua = strtoi(arg + 1, &ep, 10);
+
                 if ((ep == arg + cp) && ua >= 0 && ua <= USER_AREA_MAX)
                     out->fs_ctx.user_area = (uint8_t)ua;
                 else
@@ -66,6 +69,7 @@ int parse_fileref(FsContext *ctx, const char *arg, FileRef *out)
     {
         char *ep;
         int ua = strtoi(arg, &ep, 10);
+
         if (ep > arg && *ep == ':')
         {
             if (ua >= 0 && ua <= USER_AREA_MAX)
@@ -74,6 +78,7 @@ int parse_fileref(FsContext *ctx, const char *arg, FileRef *out)
                 name_copy(out->name, ep + 1, FILENAME_MAX - 1);
                 return 1;
             }
+
             return 0;
         }
         /* If no colon is found, it's a normal filename starting with a digit,
@@ -121,6 +126,7 @@ typedef struct
 int vu_prefix_len(const char *arg)
 {
     int i = 0;
+
     if (isalpha((unsigned char)arg[0]))
         i++;
 
@@ -214,6 +220,7 @@ static int tok_match(const char *arg, const FTok *f)
         static const char *const attrs[] = {"RO", "RW", "SYS", "DIR", "MT", "EX", "UM"};
 
         for (int i = 0; i < 7; i++)
+
             if (strcasecmp(arg, attrs[i]) == 0)
                 return 1;
 
@@ -242,6 +249,7 @@ int check_fmt(int argc, char **argv, const char *fmt)
     buf[sizeof(buf) - 1] = '\0';
 
     char *p = buf;
+
     while (*p && nt < MAX_FMT_TOKS)
     {
         while (*p == ' ')
@@ -251,6 +259,7 @@ int check_fmt(int argc, char **argv, const char *fmt)
             break;
 
         tok[nt++] = p;
+
         while (*p && *p != ' ')
             p++;
 
@@ -267,6 +276,7 @@ int check_fmt(int argc, char **argv, const char *fmt)
     for (int i = 0; i < nt; i++)
     {
         FTok f = make_tok(tok[i]);
+
         if (!tok_match(argv[i + 1], &f))
             return 0;
     }
@@ -278,6 +288,7 @@ char *make_path(char *buf, FsContext ctx, const char *name)
 {
     int i = 0;
     buf[i++] = 'A' + ctx.vol_id;
+
     if (ctx.user_area >= 10)
         buf[i++] = '0' + ctx.user_area / 10;
 
@@ -296,6 +307,7 @@ SplitName split_name83(const char *name)
 
     sn.base = name;
     sn.base_len = dot ? (int)(dot - name) : (int)strlen(name);
+
     if (sn.base_len > NAME83_BASE)
         sn.base_len = NAME83_BASE;
 
@@ -320,6 +332,7 @@ int parse_int(const char *s, int *out)
 {
     char *ep;
     int v = strtoi(s, &ep, 10);
+
     if (ep == s || *ep != '\0')
         return 0;
     *out = v;
@@ -378,6 +391,7 @@ void cmderr_print(CmdErr err)
     {
         /* ENOENT/EEXIST are plain errno errors even when a volume is
          * attached; any other volume-scoped failure is a BDOS error. */
+
         if (err.vol_id >= 0 && err.err_code != ENOENT && err.err_code != EEXIST)
             printf("Bdos Err On %c: %s\n", 'A' + err.vol_id, strerror(err.err_code));
         else
@@ -404,6 +418,7 @@ int ccp_run_app(cmd_fn_t fn, int argc, char **argv)
     sys_getctx(&ctx);
 
     CmdErr err = fn(&ctx, argc, argv);
+
     if (err.err_code != 0)
         cmderr_print(err);
 
