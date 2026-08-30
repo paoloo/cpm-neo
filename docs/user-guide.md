@@ -7,7 +7,8 @@ to inspect or modify an image.
 
 ## Prerequisites
 
-- RISC-V bare-metal toolchain: `riscv64-unknown-elf-*`
+- A bare-metal cross-toolchain for your target ISA (the bundled default is
+  riscv32: `riscv64-unknown-elf-*`)
 - `make`
 - `sh`
 - Standard POSIX tools
@@ -22,22 +23,18 @@ $ make -C sysgen
 
 ## Create a disk image
 
-Create a 2 MB Vemu image with 64 KB of RAM:
+Create a 2 MB Vemu image with 64 KB of RAM (`RAM_SIZE=0x10000` in the platform's `config.sh`):
 
 ```sh
 $ ./sysgen/build/sysgen new \
     --disk-size=2048K \
-    --mem=64K \
-    --platform=vemu \
-    --arch=riscv32
+    --platform=vemu
 ```
 
 | Option | Description |
 |---|---|
 | `--disk-size` | Disk size in KB. Requires a `K` suffix, e.g. `2048K`. Defaults to the maximum useful size |
-| `--mem` | RAM size in KB. Requires a `K` suffix, e.g. `64K` |
-| `--platform` | Target platform. `vemu` (emulator) and `pico2` (Raspberry Pi Pico 2) are included with the repository |
-| `--arch` | Architecture (`arch/<isa>` dir). Defaults to `riscv32` |
+| `--platform` | Target platform id: the 8-char max `ID=` declared by a platform's `config.sh`. `vemu` and `pico2` are included; each config selects the ISA, RAM size, and memory layout |
 | `--no-extra` | Do not install optional apps from `apps/extra` |
 
 `sysgen new` always writes the image to:
@@ -55,7 +52,7 @@ stores the disk in its flash. See [platform/pico2/README.md](../platform/pico2/R
 for the full walkthrough:
 
 ```sh
-$ ./sysgen/build/sysgen new --disk-size=2048K --mem=256K --platform=pico2 --arch=riscv32
+$ ./sysgen/build/sysgen new --disk-size=2048K --platform=pico2
 $ python3 platform/pico2/mkuf2.py      # → sysgen/build/pico2/cpmx-pico2.uf2
 ```
 
@@ -175,7 +172,6 @@ $ sysgen extract
 
 $ ./sysgen/build/sysgen new \
     --disk-size=2048K \
-    --mem=64K \
     --platform=vemu
 
 $ sysgen add sysgen/build/extract

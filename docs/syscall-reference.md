@@ -53,8 +53,8 @@ The syscall table field order is the ABI. New syscalls may only be appended.
 | 22 | `getenv` | Read an environment slot | `slot` | Slot value, or `-1` if invalid |
 | 23 | `setenv` | Write an environment slot | `slot`, `value` | `0`, or `-1` if invalid or protected |
 | 24 | `vsetattr` | Get or set volume attributes | `volid`, `attr` | `0`, or negative errno |
-| 25 | `time` | Get platform-specific time | — | Platform-defined |
-| 26 | `sync` | Flush filesystem changes | — | `0`, or negative errno |
+| 25 | `time` | Get platform-specific time | - | Platform-defined |
+| 26 | `sync` | Flush filesystem changes | - | `0`, or negative errno |
 | 27 | `consize` | Get console dimensions | `cw*`, `ch*` | `0` |
 
 ## Volume operations

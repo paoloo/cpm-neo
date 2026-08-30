@@ -64,6 +64,7 @@ int getline(char *buf, int maxlen)
                     next2 = getchar();
                 } while (next2 != EOF && !isalpha((char)next2) && next2 != '~');
             }
+
             continue;
         }
 
@@ -76,6 +77,7 @@ int getline(char *buf, int maxlen)
                 putchar(' ');
                 putchar('\b');
             }
+
             continue;
         }
 
@@ -145,7 +147,7 @@ static char *fmt_uint(char *end, uint32_t val, int base, int upper)
 {
     static const char lo[] = "0123456789abcdef";
     static const char hi[] = "0123456789ABCDEF";
-    const char       *digits = upper ? hi : lo;
+    const char *digits = upper ? hi : lo;
     *--end = '\0';
 
     if (val == 0)
@@ -166,9 +168,9 @@ static char *fmt_uint(char *end, uint32_t val, int base, int upper)
 typedef struct
 {
     char *buf;
-    int   pos;
-    int   limit;
-    int   bounded; /* 1 = stop at limit-1; 0 = flush to stdout at limit */
+    int pos;
+    int limit;
+    int bounded; /* 1 = stop at limit-1; 0 = flush to stdout at limit */
 } Writer;
 
 static void w_flush(Writer *w)
@@ -260,6 +262,7 @@ static int do_vprintf(Writer *w, const char *fmt, va_list ap)
             left = 1;
             fmt++;
         }
+
         if (*fmt == '0')
         {
             zpad = 1;
@@ -274,6 +277,7 @@ static int do_vprintf(Writer *w, const char *fmt, va_list ap)
         }
 
         char spec = *fmt;
+
         if (!spec)
             break;
 
@@ -285,22 +289,26 @@ static int do_vprintf(Writer *w, const char *fmt, va_list ap)
             w_puts_n(w, &c, 1, width, left);
             break;
         }
+
         case 's':
         {
             const char *s = va_arg(ap, const char *);
+
             if (!s)
                 s = "(null)";
             int len = 0;
+
             while (s[len])
                 len++;
             w_puts_n(w, s, len, width, left);
             break;
         }
+
         case 'd':
         case 'i':
         {
             int32_t v = va_arg(ap, int32_t);
-            char   *p;
+            char *p;
 
             if (v < 0)
             {
@@ -315,12 +323,14 @@ static int do_vprintf(Writer *w, const char *fmt, va_list ap)
             emit_num(w, p, width, left, zpad);
             break;
         }
+
         case 'u':
         {
             char *p = fmt_uint(tmp + sizeof(tmp), va_arg(ap, uint32_t), 10, 0);
             emit_num(w, p, width, left, zpad);
             break;
         }
+
         case 'x':
         case 'X':
         {
@@ -328,6 +338,7 @@ static int do_vprintf(Writer *w, const char *fmt, va_list ap)
             emit_num(w, p, width, left, zpad);
             break;
         }
+
         case '%':
             w_putc(w, '%');
             break;
@@ -356,9 +367,9 @@ static int do_vprintf(Writer *w, const char *fmt, va_list ap)
 
 int vprintf(const char *fmt, va_list ap)
 {
-    char   buf[64];
+    char buf[64];
     Writer w = {.buf = buf, .pos = 0, .limit = 64, .bounded = 0};
-    int    n = do_vprintf(&w, fmt, ap);
+    int n = do_vprintf(&w, fmt, ap);
     w_flush(&w);
     return n;
 }

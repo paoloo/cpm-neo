@@ -1,18 +1,21 @@
 #!/usr/bin/env sh
 # CP/M Neo generic app builder — compiles any source folder to a .com.
 #
-#   sh sysgen/app_build.sh <ARCH> <APP_DIR> [-o OUT.com]
+#   sh sysgen/app_build.sh <PLATFORM_DIR> <APP_DIR> [-o OUT.com]
+#
+# <PLATFORM_DIR> is the internal platform directory (from sysgen/build/
+# .platform_dir), used only to locate the platform's config.sh and includes.
 #
 # Scans <APP_DIR> recursively for .c/.s/.S sources and links a raw .com
 # binary ready to run from the TPA.  Requires a prior 'sysgen new' build
-# (sdk/lib/libc.a, sdk/obj/entry.o, core/int/kernel.elf).  Object files
+# (sdk/lib/libc.a, sdk/obj/crt0.o, core/int/kernel.elf).  Object files
 # go under build/apps/obj/<appname>/ mirroring the source layout so
 # multi-file apps with repeated filenames never collide.  Runs from
 # anywhere: it locates the CP/M Neo root relative to its own path.
 
 set -eu
 
-ARCH=${1:?}
+PLATFORM_DIR=${1:?}
 APP_DIR=${2:?}
 OUT=
 shift 2
@@ -53,19 +56,15 @@ INT="$BUILD/core/int"
 SDK_OBJ="$BUILD/sdk/obj"
 SDK_LIB="$BUILD/sdk/lib"
 
+# Platform metadata (ARCH, IO_BASE, RAM_BASE) from platform/$PLATFORM_DIR/config.sh
+# shellcheck source=/dev/null
+. "platform/$PLATFORM_DIR/config.sh"
+
+ARCH=${ARCH:?"$PLATFORM_DIR: ARCH not set in platform/$PLATFORM_DIR/config.sh"}
+
 # Architecture metadata (toolchain prefix + CFLAGS) from arch/$ARCH/config.sh
 # shellcheck source=/dev/null
 . "arch/$ARCH/config.sh"
-
-# Platform metadata persisted by build_disk.sh during 'sysgen new'
-PLATFORM=""
-[ -f "$BUILD/.platform" ] && PLATFORM=$(cat "$BUILD/.platform")
-PLATFORM_CFLAGS=""
-PLATFORM_LDSYMS=""
-if [ -n "$PLATFORM" ] && [ -f "platform/$PLATFORM/platform_flags.sh" ]; then
-    # shellcheck source=/dev/null
-    . "platform/$PLATFORM/platform_flags.sh"
-fi
 
 CC=${CROSS_COMPILE}gcc
 LD=${CROSS_COMPILE}ld
@@ -74,7 +73,7 @@ OBJCOPY=${CROSS_COMPILE}objcopy
 ARCH_FLAGS="$ARCH_CFLAGS"
 LIBGCC=$($CC $ARCH_FLAGS -print-libgcc-file-name)
 
-    CFLAGS="$ARCH_FLAGS $PLATFORM_CFLAGS -ffreestanding -nostdlib \
+CFLAGS="$ARCH_FLAGS -ffreestanding -nostdlib \
         -Os -ffunction-sections -fdata-sections \
         -fno-builtin -fomit-frame-pointer \
         -Wall -Wextra"
@@ -83,7 +82,7 @@ SDK_INC="-I sdk/include -I core/kernel/ -I core/ -I ./"
 
 APP_NAME=$(basename "$APP_DIR")
 
-if [ ! -f "$SDK_LIB/libc.a" ] || [ ! -f "$SDK_OBJ/entry.o" ] || [ ! -f "$INT/kernel.elf" ]; then
+if [ ! -f "$SDK_LIB/libc.a" ] || [ ! -f "$SDK_OBJ/crt0.o" ] || [ ! -f "$INT/kernel.elf" ]; then
     echo "ERROR: no system build found in $BUILD" >&2
     echo "       run 'sysgen new' first (it builds the SDK and kernel)." >&2
     exit 1
@@ -138,7 +137,7 @@ if [ -z "$objs" ]; then
     exit 1
 fi
 
-$LD $LDFLAGS $PLATFORM_LDSYMS -T sdk/linker/linker_sdk.ld \
-    $objs "$SDK_OBJ/entry.o" "$SDK_LIB/libc.a" "$LIBGCC" \
+$LD $LDFLAGS -T sdk/linker/linker_sdk.ld \
+    $objs "$SDK_OBJ/crt0.o" "$SDK_LIB/libc.a" "$LIBGCC" \
     --just-symbols="$INT/kernel.elf" -o "$APP_OBJ/$APP_NAME.elf"
 $OBJCOPY -O binary "$APP_OBJ/$APP_NAME.elf" "$OUT"

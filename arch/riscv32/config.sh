@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 # arch/riscv32/config.sh
 # Architecture metadata — sourced by build_disk.sh / app_build.sh after
-# --arch is resolved.  Supplies the cross toolchain prefix and the concrete
-# compiler flags for this ISA
+# the platform config declares ARCH=riscv32.  Supplies the cross toolchain
+# prefix and the concrete compiler flags for this ISA
 
 # Toolchain resolution order:
 #   1. $CROSS_COMPILE from the environment (always wins)

@@ -168,7 +168,7 @@ void bios_conout(int c)
     uart_putc_raw(c);
 }
 
-int bios_const(void)
+int bios_constat(void)
 {
     return (REG32(UART0_BASE + UART_UARTFR_OFFSET) & UART_UARTFR_RXFE_BITS) ? 0 : 0xFF;
 }

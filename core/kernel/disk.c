@@ -6,10 +6,10 @@
  * (at most VOL_MAX * VOL_MAX_RUN = 16) volume runs.
  */
 
-#include "bios.h"
-#include "kernel_abi.h"
 #include "disk.h"
 #include "bdos.h"
+#include "bios.h"
+#include "kernel_abi.h"
 #include "string.h"
 
 #define DISK_DEFAULT_MOUNT_BLOCKS 64
@@ -18,14 +18,14 @@ typedef struct
 {
     uint16_t start; /* first block index */
     uint16_t count; /* number of blocks  */
-} BlockRun;              /* 4 bytes */
+} BlockRun;         /* 4 bytes */
 
 typedef struct
 {
     BlockRun run[VOL_MAX_RUNS]; /* ordered; run[0] = head */
-    uint8_t run_count;    /* 0 = unmounted              */
-    uint8_t attr;         /* VOL_ATTR_RW / VOL_ATTR_RO  */
-} VolRec;                 /* 18 bytes               */
+    uint8_t run_count;          /* 0 = unmounted              */
+    uint8_t attr;               /* VOL_ATTR_RW / VOL_ATTR_RO  */
+} VolRec;                       /* 18 bytes               */
 
 typedef struct
 {
@@ -48,6 +48,7 @@ static uint16_t min_viable_blocks(void)
 static uint16_t vol_blocks(const VolRec *vr)
 {
     uint16_t blocks = 0;
+
     for (uint8_t i = 0; i < vr->run_count; i++)
         blocks += vr->run[i].count;
     return blocks;
@@ -64,6 +65,7 @@ static int collect_used_runs(uint16_t *rstart, uint16_t *rend, int cap)
     for (int v = 0; v < VOL_MAX; v++)
     {
         const VolRec *vr = &g_disk.volumes[v];
+
         if (vr->run_count > VOL_MAX_RUNS)
             return -1;
 
@@ -73,6 +75,7 @@ static int collect_used_runs(uint16_t *rstart, uint16_t *rend, int cap)
                 return -1;
 
             uint32_t end = (uint32_t)vr->run[i].start + vr->run[i].count;
+
             if (end > g_disk.num_blocks)
                 return -1;
 
@@ -86,11 +89,13 @@ static int collect_used_runs(uint16_t *rstart, uint16_t *rend, int cap)
     }
 
     /* Insertion sort by start (n <= 16, so this is cheap). */
+
     for (int i = 1; i < n; i++)
     {
         uint16_t s = rstart[i];
         uint16_t e = rend[i];
         int j = i - 1;
+
         while (j >= 0 && rstart[j] > s)
         {
             rstart[j + 1] = rstart[j];
@@ -112,6 +117,7 @@ static int validate_layout(void)
     uint16_t s[VOL_MAX * VOL_MAX_RUNS];
     uint16_t e[VOL_MAX * VOL_MAX_RUNS];
     int n = collect_used_runs(s, e, VOL_MAX * VOL_MAX_RUNS);
+
     if (n < 0)
         return -1;
 
@@ -130,10 +136,12 @@ static int find_free_run(uint16_t n, uint16_t *start)
     uint16_t s[VOL_MAX * VOL_MAX_RUNS];
     uint16_t e[VOL_MAX * VOL_MAX_RUNS];
     int nruns = collect_used_runs(s, e, VOL_MAX * VOL_MAX_RUNS);
+
     if (nruns < 0)
         return -1;
 
     uint16_t pos = 0;
+
     for (int i = 0; i < nruns; i++)
     {
         if (s[i] - pos >= n)
@@ -141,6 +149,7 @@ static int find_free_run(uint16_t n, uint16_t *start)
             *start = pos;
             return 0;
         }
+
         if (e[i] > pos)
             pos = e[i];
     }
@@ -160,14 +169,17 @@ uint16_t disk_free_blocks(void)
     uint16_t s[VOL_MAX * VOL_MAX_RUNS];
     uint16_t e[VOL_MAX * VOL_MAX_RUNS];
     int nruns = collect_used_runs(s, e, VOL_MAX * VOL_MAX_RUNS);
+
     if (nruns < 0)
         return 0;
 
     uint32_t free_blocks = 0;
     uint16_t pos = 0;
+
     for (int i = 0; i < nruns; i++)
     {
         free_blocks += (uint32_t)s[i] - pos;
+
         if (e[i] > pos)
             pos = e[i];
     }
@@ -183,6 +195,7 @@ static int range_is_free(uint16_t start, uint16_t n)
     uint16_t s[VOL_MAX * VOL_MAX_RUNS];
     uint16_t e[VOL_MAX * VOL_MAX_RUNS];
     int nruns = collect_used_runs(s, e, VOL_MAX * VOL_MAX_RUNS);
+
     if (nruns < 0)
         return 0;
 
@@ -206,19 +219,23 @@ static int vol_translate(int8_t vol_id, uint32_t lba, uint32_t *phys)
         return -1;
 
     VolRec *vr = &g_disk.volumes[vol_id];
+
     if (vr->run_count == 0)
         return -1;
 
     uint32_t sofar = 0;
+
     for (uint8_t i = 0; i < vr->run_count; i++)
     {
         uint32_t seg = (uint32_t)vr->run[i].count * BD_BLOCK_SECS;
+
         if (lba < sofar + seg)
         {
-            *phys = (uint32_t)g_disk.block_base +
-                    (uint32_t)vr->run[i].start * BD_BLOCK_SECS + (lba - sofar);
+            *phys = (uint32_t)g_disk.block_base + (uint32_t)vr->run[i].start * BD_BLOCK_SECS +
+                    (lba - sofar);
             return 0;
         }
+
         sofar += seg;
     }
 
@@ -253,8 +270,7 @@ int disk_init(void)
     if (read16(buf + VMAP_MAGIC_OFF) != VMAP_MAGIC)
         return -1;
 
-    if (g_disk.num_blocks == 0 ||
-        g_disk.num_blocks > BD_VOL_MAX_BLOCKS)
+    if (g_disk.num_blocks == 0 || g_disk.num_blocks > BD_VOL_MAX_BLOCKS)
         return -1;
 
     if (g_disk.block_base < VMAP_LBA + 1)
@@ -275,6 +291,7 @@ int disk_vread(int8_t vol_id, uint32_t lba, uint8_t *buf)
 
     if (!buf)
         return -1;
+
     if (vol_translate(vol_id, lba, &phys) != 0)
         return -1;
 
@@ -287,6 +304,7 @@ int disk_vwrite(int8_t vol_id, uint32_t lba, const uint8_t *buf)
 
     if (!buf)
         return -1;
+
     if (vol_translate(vol_id, lba, &phys) != 0)
         return -1;
 
@@ -297,24 +315,29 @@ int disk_vmount(int8_t vol_id)
 {
     if (vol_id < 0 || vol_id >= VOL_MAX)
         return EINVAL;
+
     if (!g_disk.initialized)
         return EIO;
 
     VolRec *vr = &g_disk.volumes[vol_id];
+
     if (vr->run_count != 0)
         return EINVAL;
 
     uint16_t n = DISK_DEFAULT_MOUNT_BLOCKS;
     uint16_t start;
+
     if (find_free_run(n, &start) != 0)
     {
         n = min_viable_blocks();
+
         if (find_free_run(n, &start) != 0)
             return ENOSPC;
     }
 
     /* The extent must leave room for the reserved block plus at least
      * one usable data block, or the volume would be unusable. */
+
     if ((n * BD_BLOCK_SECS - BD_DATA_START) / BD_BLOCK_SECS <= BD_RESERVED_BLOCKS)
         return ENOSPC;
 
@@ -335,6 +358,7 @@ int disk_vextend(int8_t vol_id, uint16_t n)
         return EIO;
 
     VolRec *vr = &g_disk.volumes[vol_id];
+
     if (vr->run_count == 0)
         return EINVAL;
 
@@ -364,14 +388,17 @@ int disk_vextend(int8_t vol_id, uint16_t n)
             *vr = save;
             return EIO;
         }
+
         return EOK;
     }
 
     /* Otherwise gather a fresh contiguous run in a new extent. */
+
     if (vr->run_count >= VOL_MAX_RUNS)
         return ENOSPC;
 
     uint16_t start;
+
     if (find_free_run(n, &start) != 0)
         return ENOSPC;
 
@@ -393,10 +420,12 @@ int disk_vshrink(int8_t vol_id, uint16_t n)
 {
     if (vol_id < 0 || vol_id >= VOL_MAX)
         return EINVAL;
+
     if (!g_disk.initialized)
         return EIO;
 
     VolRec *vr = &g_disk.volumes[vol_id];
+
     if (vr->run_count == 0)
         return EINVAL;
 
@@ -407,6 +436,7 @@ int disk_vshrink(int8_t vol_id, uint16_t n)
         return EVOLRO;
 
     uint16_t cur = vol_blocks(vr);
+
     if (n >= cur)
         return EINVAL;
 
@@ -416,9 +446,11 @@ int disk_vshrink(int8_t vol_id, uint16_t n)
     /* Trim n blocks from the tail, walking runs backwards. */
     VolRec save = *vr;
     uint16_t todo = n;
+
     while (todo > 0 && vr->run_count > 0)
     {
         BlockRun *last = &vr->run[vr->run_count - 1];
+
         if (last->count <= todo)
         {
             todo = todo - last->count;
@@ -455,6 +487,7 @@ int disk_vunmount(int8_t vol_id)
         return EIO;
 
     VolRec *vr = &g_disk.volumes[vol_id];
+
     if (vr->run_count == 0)
         return EINVAL;
 

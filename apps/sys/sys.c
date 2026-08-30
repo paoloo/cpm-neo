@@ -9,29 +9,38 @@ static CmdErr cmd_sys(FsContext *ctx, int argc, char **argv)
         return cmderr_syntax(NULL);
 
     SysInfo si;
+
     if (sys_info(&si) != EOK)
         return cmderr_bdos(ctx->vol_id, EIO);
 
-    strupr(si.platform);
+    printf("\nCP/M Neo v%u.%u\n", si.os_version >> 8, si.os_version & 0xFF);
+    printf("------------------------------------\n");
+    printf("%-16s : ", "Platform");
 
-    printf("CP/M Neo v%u.%u for %s\n",
-           si.os_version >> 8, si.os_version & 0xFF, si.platform);
-    printf("    Kernel   v%u.%u\n", si.kern_version >> 8, si.kern_version & 0xFF);
-    printf("    CCP      v%u.%u\n", si.ccp_version >> 8, si.ccp_version & 0xFF);
-    printf("    TPA      %uk\n", si.tpa);
-    printf("    Disk     %uk\n", si.disk_size_kb);
+    for (int i = 0; si.platform[i]; i++)
+    {
+        char c = si.platform[i];
+        putchar((c >= 'a' && c <= 'z') ? (char)(c - ('a' - 'A')) : c);
+    }
 
-    printf("    Vols     [");
-    int mounted = 0;
+    putchar('\n');
+    printf("%-16s : %uK\n", "Disk", si.disk_size_kb);
+    printf("%-16s : %uK\n", "TPA", si.tpa);
+    printf("%-16s : [", "Volumes");
+
     for (int v = 0; v < VOL_MAX; v++)
     {
         if (!si.vol_mounted[v])
             continue;
 
-        printf("%s%c:", mounted ? ", " : "", 'A' + v);
-        mounted = 1;
+        printf("%s%c:", v ? ", " : "", 'A' + v);
     }
+
     printf("]\n");
+    printf("------------------------------------\n");
+    printf("%-16s : v%u.%u\n", "Kernel", si.kern_version >> 8, si.kern_version & 0xFF);
+    printf("%-16s : v%u.%u\n", "CCP", si.ccp_version >> 8, si.ccp_version & 0xFF);
+    printf("------------------------------------\n\n");
 
     return cmderr_ok();
 }

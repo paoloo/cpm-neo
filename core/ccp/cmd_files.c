@@ -50,6 +50,7 @@ static void ren_pattern_match(const char *src_pat, const char *matched, RenMatch
         if (*sp == '*')
         {
             sp++;
+
             while (*sp == '*' || *sp == '?')
                 sp++;
 
@@ -61,10 +62,12 @@ static void ren_pattern_match(const char *src_pat, const char *matched, RenMatch
                     rm->seg_len[rm->nseg] = (int)strlen(mp);
                     rm->nseg++;
                 }
+
                 break;
             }
 
             const char *found = strchr(mp, *sp);
+
             if (!found)
                 break;
 
@@ -74,6 +77,7 @@ static void ren_pattern_match(const char *src_pat, const char *matched, RenMatch
                 rm->seg_len[rm->nseg] = (int)(found - mp);
                 rm->nseg++;
             }
+
             mp = found;
         }
         else
@@ -115,6 +119,7 @@ static void ren_pattern_format(const char *dst_pat, const RenMatch *rm, char *ou
             {
                 int len = rm->seg_len[seg_idx];
                 const char *s = rm->seg_start[seg_idx];
+
                 for (int i = 0; i < len && o < out_sz - 1; i++)
                     out[o++] = s[i];
                 seg_idx++;
@@ -124,6 +129,7 @@ static void ren_pattern_format(const char *dst_pat, const RenMatch *rm, char *ou
         {
             /* '?' consumes captured characters in match order, not by
              * absolute position in the destination pattern. */
+
             if (q_idx < rm->npos)
                 out[o++] = rm->pos_map[q_idx];
             q_idx++;
@@ -145,22 +151,28 @@ CmdErr cmd_era(FsContext *ctx, int argc, char **argv)
     if (!has_wildcard(argv[1]))
     {
         int rc = remove(argv[1]);
+
         return cmderr_bdos(vol_from_arg(argv[1], ctx->vol_id), rc);
     }
 
     FileRef ref;
+
     if (!parse_fileref(ctx, argv[1], &ref))
         return cmderr_syntax(NULL);
 
     FileInfo di;
+
     int found = 0;
+
     while (find_next(argv[1], &di) == EOK)
     {
         char full[FSPATH_MAX];
         make_path(full, ref.fs_ctx, di.name);
         int rc = remove(full);
+
         if (rc != EOK)
             return cmderr_bdos(ref.fs_ctx.vol_id, rc);
+
         found = 1;
     }
 
@@ -178,6 +190,7 @@ CmdErr cmd_ren(FsContext *ctx, int argc, char **argv)
     if (!has_wildcard(argv[1]))
     {
         FileRef src, dst;
+
         if (!parse_fileref(ctx, argv[1], &src))
             return cmderr_syntax(NULL);
 
@@ -188,25 +201,26 @@ CmdErr cmd_ren(FsContext *ctx, int argc, char **argv)
         char src_full[FSPATH_MAX], dst_full[FSPATH_MAX];
         make_path(src_full, src.fs_ctx, src.name);
         make_path(dst_full, dst.fs_ctx, dn);
-        
+
         int rc = rename(src_full, dst_full);
 
         return cmderr_bdos(src.fs_ctx.vol_id, rc);
     }
 
     FileRef src;
+
     if (!parse_fileref(ctx, argv[1], &src))
         return cmderr_syntax(NULL);
 
     FileRef dst;
+
     if (!parse_fileref(ctx, argv[2], &dst))
         return cmderr_syntax(NULL);
 
     const char *src_pat = strchr(argv[1], ':');
     src_pat = src_pat ? src_pat + 1 : argv[1];
-    const char *dst_pat = dst.name[0]
-        ? (strchr(argv[2], ':') ? strchr(argv[2], ':') + 1 : argv[2])
-        : src_pat;
+    const char *dst_pat =
+        dst.name[0] ? (strchr(argv[2], ':') ? strchr(argv[2], ':') + 1 : argv[2]) : src_pat;
 
     FileInfo di;
     int total = 0;
@@ -240,6 +254,7 @@ CmdErr cmd_type(FsContext *ctx, int argc, char **argv)
         return cmderr_syntax(NULL);
 
     int fd = open(argv[1], "r");
+
     if (fd < 0)
         return cmderr_bdos(vol_from_arg(argv[1], ctx->vol_id), fd);
 
@@ -265,6 +280,7 @@ CmdErr cmd_type(FsContext *ctx, int argc, char **argv)
                 putchar((char)c);
 
                 int is_newline = (c == '\n');
+
                 if (c >= 0x20 && ++col >= pg.cols)
                     is_newline = 1;
 

@@ -4,32 +4,13 @@
  */
 
 #include "kernel.h"
+#include <syscall.h>
 
-static void print_TPA(void)
+static void print_system_info(void)
 {
-    uintptr_t size = (uintptr_t)__kernel_base - TPA_LOAD_ADDR;
-    uint32_t kb = (uint32_t)(size / 1024);
+    char *argv[] = {"SYS"};
 
-    char buf[16];
-    char *ptr = &buf[15];
-
-    *ptr = '\0';
-    *(--ptr) = 'A';
-    *(--ptr) = 'P';
-    *(--ptr) = 'T';
-    *(--ptr) = ' ';
-    *(--ptr) = 'K';
-
-    uint32_t v = kb;
-    do
-    {
-        *(--ptr) = '0' + (v % 10);
-        v /= 10;
-    } while (v > 0);
-
-    puts("");
-    puts(ptr);
-    puts("");
+    sys_exec("SYS", 1, argv);
 }
 
 void os_entry(void)
@@ -37,17 +18,19 @@ void os_entry(void)
     if (kernel_init() != EOK)
     {
         puts(" \nVOL ERR");
+
         while (1)
             ;
     }
 
-    print_TPA();
+    print_system_info();
     kexec_ccp();
 }
 
 void __attribute__((used, noinline)) _start(void)
 {
     os_entry();
+
     for (;;)
         ;
 }

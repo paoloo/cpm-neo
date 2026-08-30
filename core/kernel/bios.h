@@ -18,7 +18,7 @@ void bios_conout(int c);
 int bios_conin(void);
 
 /* Return the console input status (e.g., 0xFF if char ready, 0 if empty). */
-int bios_const(void);
+int bios_constat(void);
 
 /* Get the console width and height in characters. */
 void bios_consize(uint8_t *cw, uint8_t *ch);

@@ -27,7 +27,7 @@ int atoi(const char *s)
 int strtoi(const char *nptr, char **endptr, int base)
 {
     const char *p = nptr;
-    int         sign = 1, val = 0;
+    int sign = 1, val = 0;
 
     while (*p == ' ' || *p == '\t')
         p++;
@@ -45,6 +45,7 @@ int strtoi(const char *nptr, char **endptr, int base)
         if (*p == '0')
         {
             p++;
+
             if (*p == 'x' || *p == 'X')
             {
                 base = 16;
@@ -60,9 +61,11 @@ int strtoi(const char *nptr, char **endptr, int base)
     }
 
     int ovf = 0;
+
     while (1)
     {
         int d;
+
         if (*p >= '0' && *p <= '9')
             d = *p - '0';
         else if (*p >= 'a' && *p <= 'f')

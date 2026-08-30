@@ -221,12 +221,6 @@ typedef struct
 
 #define VHDR_VER          0x0001u /* volume header format version */
 
-/* TPA load address.  Platforms whose CP/M RAM is not mapped at physical
- * address 0 (e.g. pico2: SRAM at 0x20000000) override this via -D. */
-#ifndef TPA_LOAD_ADDR
-#define TPA_LOAD_ADDR 0x0100
-#endif
-
 /* Environment slot indices */
 
 #define ENV_SYSCALL_PTR  0   /* Pointer to syscall table */

@@ -1,40 +1,33 @@
 #!/usr/bin/env sh
 # CP/M Neo OS build backend — driven by the sysgen tool.
 #
-#   sh sysgen/build_disk.sh --arch=<ARCH> --mem=<KB> --platform=<PLATFORM>
+#   sh sysgen/build_disk.sh --platform=<PLATFORM>
 #
 # Builds the bootloader, kernel and CCP into sysgen/build/, next to the
 # tool binary.  Runs from anywhere: it locates the CP/M Neo root relative
 # to its own path.  System and user apps are not built here — they are
 # compiled by sysgen/app_build.sh and installed into the disk image by
 # 'sysgen new' / 'sysgen install'.
+#
+# The target's memory layout comes from platform/<PLATFORM>/config.sh
+# (ID, ARCH, RAM_SIZE, IO_BASE, RAM_BASE).  Everything else is derived here:
+#   RAM_END   = RAM_BASE + RAM_SIZE   (nominal end of the SRAM region)
+#   RAM_TOP   = min(RAM_END, IO_BASE) (top of usable RAM; what the kernel
+#                                      packs below — __ram_top)
+#   TPA_BASE  = RAM_BASE + 0x100      (CP/M TPA load address)
 
 set -eu
 
-ARCH=""
-MEM_SIZE=""
-PLATFORM=""
+PLATFORM_ID=""
 
 for arg in "$@"; do
     case "$arg" in
-        --arch=*)   ARCH="${arg#--arch=}" ;;
-        --mem=*)    MEM_SIZE="${arg#--mem=}" ;;
-        --platform=*) PLATFORM="${arg#--platform=}" ;;
+        --platform=*) PLATFORM_ID="${arg#--platform=}" ;;
         *) echo "Unknown option: $arg" >&2; exit 1 ;;
     esac
 done
 
-ARCH=${ARCH:-riscv32}
-MEM_SIZE=${MEM_SIZE:?"--mem is required (e.g. --mem=64K)"}
-PLATFORM=${PLATFORM:?"--platform is required"}
-
-# Convert --mem=64K style suffix to hex bytes for ld --defsym
-mem_kb=$(printf '%s' "$MEM_SIZE" | tr '[:lower:]' '[:upper:]')
-case "$mem_kb" in
-    *K) mem_kb=${mem_kb%K} ;;
-    *)  echo "--mem value must have K suffix (e.g. --mem=64K)" >&2; exit 1 ;;
-esac
-MEM_HEX=$(printf '0x%X' "$((mem_kb * 1024))")
+PLATFORM_ID=${PLATFORM_ID:?"--platform=<ID> is required"}
 
 SELF=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT=$(CDPATH= cd -- "$SELF/.." && pwd)
@@ -47,9 +40,98 @@ CCP_OBJ="$BUILD/core/obj/ccp"
 SDK_OBJ="$BUILD/sdk/obj"
 SDK_LIB="$BUILD/sdk/lib"
 
+# ---------------------------------------------------------------------------
+# Platform lookup: --platform=<ID> must match the ID= field of one platform
+# config.sh.  The platform folder is purely a filesystem location derived
+# here; it is never a platform identity.
+# ---------------------------------------------------------------------------
+match_id() {
+    awk -F= '
+        /^[[:space:]]*ID=/ {
+            v=$2
+            gsub(/[ \t\r]/, "", v)
+            gsub(/^"+|"+$/, "", v)
+            if (v != "" && !done) { print v; done=1 }
+        }' "$1"
+}
+
+PLATFORM_DIR=""
+for CFG in platform/*/config.sh; do
+    CFG_ID=$(match_id "$CFG")
+
+    if [ -z "$CFG_ID" ]; then
+        continue
+    fi
+
+    CFG_ID_U=$(printf '%s' "$CFG_ID"            | tr '[:lower:]' '[:upper:]')
+    ARG_ID_U=$(printf '%s' "$PLATFORM_ID"       | tr '[:lower:]' '[:upper:]')
+
+    if [ "$CFG_ID_U" = "$ARG_ID_U" ]; then
+        if [ -n "$PLATFORM_DIR" ]; then
+            OTHER_DIR=${CFG%/config.sh}
+            OTHER_DIR=${OTHER_DIR#platform/}
+
+            echo "ERROR: duplicate platform ID '$PLATFORM_ID' in '$PLATFORM_DIR' and '$OTHER_DIR'" >&2
+            exit 1
+        fi
+
+        PLATFORM_DIR=${CFG%/config.sh}
+        PLATFORM_DIR=${PLATFORM_DIR#platform/}
+    fi
+done
+
+if [ -z "$PLATFORM_DIR" ]; then
+    echo "ERROR: unknown platform '$PLATFORM_ID'" >&2
+    exit 1
+fi
+
+# Platform metadata (ID, ARCH, RAM_SIZE, IO_BASE, RAM_BASE) from platform/$PLATFORM_DIR/config.sh
+# shellcheck source=/dev/null
+. "platform/$PLATFORM_DIR/config.sh"
+
+ARCH=${ARCH:?"$PLATFORM_ID: ARCH not set in platform/$PLATFORM_DIR/config.sh"}
+IO_BASE=${IO_BASE:?"$PLATFORM_ID: IO_BASE not set in platform/$PLATFORM_DIR/config.sh"}
+RAM_BASE=${RAM_BASE:?"$PLATFORM_ID: RAM_BASE not set in platform/$PLATFORM_DIR/config.sh"}
+RAM_SIZE=${RAM_SIZE:?"$PLATFORM_ID: RAM_SIZE not set in platform/$PLATFORM_DIR/config.sh"}
+ID=${ID:?"$PLATFORM_ID: ID not set in platform/$PLATFORM_DIR/config.sh (8-char OS platform id)"}
+
+CFG_ID_U=$(printf '%s' "$ID"          | tr '[:lower:]' '[:upper:]')
+ARG_ID_U=$(printf '%s' "$PLATFORM_ID" | tr '[:lower:]' '[:upper:]')
+if [ "$CFG_ID_U" != "$ARG_ID_U" ]; then
+    echo "ERROR: platform ID mismatch: config.sh declares '$ID' but --platform=$PLATFORM_ID" >&2
+    exit 1
+fi
+
+if [ "${#ID}" -gt 8 ]; then
+    echo "ERROR: ID '$ID' exceeds the 8-char S0_PLATFORM limit" >&2
+    exit 1
+fi
+
 # Architecture metadata (toolchain prefix + CFLAGS) from arch/$ARCH/config.sh
 # shellcheck source=/dev/null
 . "arch/$ARCH/config.sh"
+
+# Derived layout.  RAM_END is the nominal end of SRAM (RAM_BASE + RAM_SIZE);
+# RAM_TOP is the top of usable RAM and may be lower when an MMIO window lies
+# inside the nominal RAM range (as on vemu): RAM_TOP = min(RAM_END, IO_BASE).
+# The clamp keeps the kernel from ever colliding with that window.  On a real
+# MCU where peripherals are mapped far above SRAM, IO_BASE > RAM_END and
+# RAM_TOP falls back to RAM_END — the whole SRAM region is usable.  The linker
+# scripts below enforce the real invariants: boot scratch/stack, the kernel
+# image, and the CCP/TPA must all fit under __ram_top — a clashing IO_BASE or
+# RAM_BASE therefore fails the link, never producing a broken image.
+RAM_BASE_DEC=$((RAM_BASE))
+RAM_END_DEC=$((RAM_BASE + RAM_SIZE))
+IO_BASE_DEC=$((IO_BASE))
+if [ "$RAM_END_DEC" -lt "$IO_BASE_DEC" ]; then
+    RAM_TOP_DEC=$RAM_END_DEC
+else
+    RAM_TOP_DEC=$IO_BASE_DEC
+fi
+TPA_BASE_DEC=$((RAM_BASE + 0x100))
+IO_BASE_HEX=$(printf '0x%X' "$IO_BASE_DEC")
+RAM_TOP_HEX=$(printf '0x%X' "$RAM_TOP_DEC")
+TPA_BASE_HEX=$(printf '0x%X' "$TPA_BASE_DEC")
 
 CC=${CROSS_COMPILE}gcc
 LD=${CROSS_COMPILE}ld
@@ -60,41 +142,31 @@ AR=${CROSS_COMPILE}ar
 ARCH_FLAGS="$ARCH_CFLAGS"
 LIBGCC=$($CC $ARCH_FLAGS -print-libgcc-file-name)
 
-# ── Platform build hooks (all optional) ────────────────────────────────────
-#   platform/<name>/platform_flags.sh — PLATFORM_CFLAGS / PLATFORM_LDSYMS
-#   platform/<name>/linker_boot.ld    — overrides arch/$ARCH/linker_boot.ld
-#   platform/<name>/boot_extra.S      — extra objects linked into the bootloader
-PLATFORM_CFLAGS=""
-PLATFORM_LDSYMS=""
-if [ -f "platform/$PLATFORM/platform_flags.sh" ]; then
-    # shellcheck source=/dev/null
-    . "platform/$PLATFORM/platform_flags.sh"
-fi
-
+# Optional platform boot hooks. Most targets use the architecture linker
+# directly; flash-booting boards may provide a linker layout and image header.
 BOOT_LINKER="arch/$ARCH/linker_boot.ld"
-if [ -f "platform/$PLATFORM/linker_boot.ld" ]; then
-    BOOT_LINKER="platform/$PLATFORM/linker_boot.ld"
+if [ -f "platform/$PLATFORM_DIR/linker_boot.ld" ]; then
+    BOOT_LINKER="platform/$PLATFORM_DIR/linker_boot.ld"
 fi
 
 BOOT_EXTRA=""
-if [ -f "platform/$PLATFORM/boot_extra.S" ]; then
-    BOOT_EXTRA="platform/$PLATFORM/boot_extra.S"
+if [ -f "platform/$PLATFORM_DIR/boot_extra.S" ]; then
+    BOOT_EXTRA="platform/$PLATFORM_DIR/boot_extra.S"
 fi
 
-# Bootloader size budget: platforms that boot from their own flash ROM (e.g.
-# pico2) reserve a large boot slot; default stays the classic 1 KB.
-case "$PLATFORM" in
+# Flash-booting targets can reserve a larger first-stage slot.
+case "$PLATFORM_DIR" in
     pico2) BOOT_MAX=16384 ;;
     *)     BOOT_MAX=1024 ;;
 esac
 
-CFLAGS="$ARCH_FLAGS $PLATFORM_CFLAGS -ffreestanding -nostdlib \
+CFLAGS="$ARCH_FLAGS -ffreestanding -nostdlib \
         -Os -ffunction-sections -fdata-sections \
         -fno-builtin -fomit-frame-pointer \
         -Wall -Wextra"
 LDFLAGS="--gc-sections --strip-debug --no-warn-rwx-segments -m $LD_EMULATION"
 
-PLATFORM_INC="-I platform/$PLATFORM"
+PLATFORM_INC="-I platform/$PLATFORM_DIR"
 KERNEL_INC="-I core/kernel/ -I sdk/include -I core/ -I ./ $PLATFORM_INC"
 CCP_INC="-I core/ccp/ -I core/kernel/ -I sdk/include -I core/ -I ./ $PLATFORM_INC"
 SDK_INC="-I sdk/include -I core/kernel/ -I core/ -I ./ $PLATFORM_INC"
@@ -109,12 +181,13 @@ mkdir -p "$BUILD" "$INT" "$SDK_LIB"
 # ── Bootloader ─────────────────────────────────────────────
 echo "  Building bootloader..."
 $CC $CFLAGS $PLATFORM_INC -I core/kernel/ \
-    -c "platform/$PLATFORM/bios.c" -o "$INT/boot_plat.o"
+    -c "platform/$PLATFORM_DIR/bios.c" -o "$INT/boot_plat.o"
 BOOT_ONLY_SECT="--only-section=.boot"
 [ -n "$BOOT_EXTRA" ] && BOOT_ONLY_SECT="$BOOT_ONLY_SECT --only-section=.image_def"
 $CC $CFLAGS -I arch/$ARCH/ -I core/kernel/ \
-    -Wl,--gc-sections -Wl,--strip-debug \
-    -Wl,--defsym=__mem_size="$MEM_HEX" \
+    -Wl,--gc-sections -Wl,--strip-debug -Wl,--no-warn-rwx-segments \
+    -Wl,--defsym=__io_base="$IO_BASE_HEX" \
+    -Wl,--defsym=__ram_top="$RAM_TOP_HEX" \
     -T "$BOOT_LINKER" \
     arch/$ARCH/boot.S $BOOT_EXTRA "$INT/boot_plat.o" -o "$INT/bootloader.elf"
 $OBJCOPY -O binary $BOOT_ONLY_SECT "$INT/bootloader.elf" "$BUILD/bootloader.bin"
@@ -127,9 +200,9 @@ fi
 # ── Kernel (two-pass) ──────────────────────────────────────
 echo "  Building kernel..."
 KERNEL_C="core/kernel/main.c core/kernel/kernel.c core/kernel/bdos.c \
-          core/kernel/disk.c platform/$PLATFORM/bios.c \
+          core/kernel/disk.c platform/$PLATFORM_DIR/bios.c \
           sdk/src/string.c sdk/src/stdio.c sdk/src/fs.c sdk/src/stdlib.c"
-KERNEL_S="sdk/src/entry.S"
+KERNEL_S="arch/$ARCH/crt0.S"
 
 KERNEL_OBJS=
 for src in $KERNEL_C; do
@@ -145,24 +218,24 @@ done
 
 $LD $LDFLAGS \
     --defsym=__KERN_START=0x4000 \
-    --defsym=__mem_size="$MEM_HEX" \
-    $PLATFORM_LDSYMS \
+    --defsym=__io_base="$IO_BASE_HEX" \
+    --defsym=__ram_top="$RAM_TOP_HEX" \
+    --defsym=__tpa_base="$TPA_BASE_HEX" \
     -T core/kernel/linker_kernel.ld \
     $KERNEL_OBJS "$LIBGCC" -o "$INT/kernel_pass1.elf"
 
 KERN_TOTAL_HEX=$($OBJDUMP -t "$INT/kernel_pass1.elf" | awk '/[[:space:]]__kernel_total$/{print "0x"$1}')
-IO_BASE_HEX=$($OBJDUMP -t "$INT/kernel_pass1.elf" | awk '/[[:space:]]__io_base$/{print "0x"$1}')
 KSTACK_GUARD_HEX=$($OBJDUMP -t "$INT/kernel_pass1.elf" | awk '/[[:space:]]__kstack_guard$/{print "0x"$1}')
 KERN_TOTAL=$(printf "%d" "$KERN_TOTAL_HEX")
-IO_BASE=$(printf "%d" "$IO_BASE_HEX")
 KSTACK_GUARD=$(printf "%d" "$KSTACK_GUARD_HEX")
-KERN_START=$(((IO_BASE - KERN_TOTAL - KSTACK_GUARD) & ~3))
+KERN_START=$(((RAM_TOP_DEC - KERN_TOTAL - KSTACK_GUARD) & ~3))
 KERN_START_HEX=0x$(printf '%x' "$KERN_START")
 
 $LD $LDFLAGS \
     --defsym=__KERN_START="$KERN_START_HEX" \
-    --defsym=__mem_size="$MEM_HEX" \
-    $PLATFORM_LDSYMS \
+    --defsym=__io_base="$IO_BASE_HEX" \
+    --defsym=__ram_top="$RAM_TOP_HEX" \
+    --defsym=__tpa_base="$TPA_BASE_HEX" \
     -T core/kernel/linker_kernel.ld \
     $KERNEL_OBJS "$LIBGCC" -o "$INT/kernel.elf"
 
@@ -187,7 +260,7 @@ for src in $SDK_LIBC_SRCS; do
     compile "$CFLAGS $SDK_INC" "$src" "$obj"
     SDK_LIBC_OBJS="$SDK_LIBC_OBJS $obj"
 done
-compile "$CFLAGS $SDK_INC" sdk/src/entry.S "$SDK_OBJ/entry.o"
+compile "$CFLAGS $SDK_INC" arch/$ARCH/crt0.S "$SDK_OBJ/crt0.o"
 $AR rcs "$SDK_LIB/libc.a" $SDK_LIBC_OBJS
 
 # ── CCP ───────────────────────────────────────────────────
@@ -201,10 +274,10 @@ for src in $CCP_C; do
     compile "$CFLAGS $CCP_INC" "$src" "$obj"
     CCP_OBJS="$CCP_OBJS $obj"
 done
-$LD $LDFLAGS $PLATFORM_LDSYMS -T sdk/linker/linker_sdk.ld \
-    $CCP_OBJS "$SDK_OBJ/entry.o" "$LIBGCC" \
+$LD $LDFLAGS -T sdk/linker/linker_sdk.ld \
+    $CCP_OBJS "$SDK_OBJ/crt0.o" "$LIBGCC" \
     --just-symbols="$INT/kernel.elf" -o "$INT/ccp.elf"
 $OBJCOPY -O binary "$INT/ccp.elf" "$INT/ccp.bin"
 
-printf '%s' "$ARCH" > "$BUILD/.arch"
-printf '%s' "$PLATFORM" > "$BUILD/.platform"
+printf '%s' "$PLATFORM_DIR" > "$BUILD/.platform_dir"
+printf '%s' "$ID" > "$BUILD/.platform_id"

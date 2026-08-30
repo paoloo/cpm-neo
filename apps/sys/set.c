@@ -30,6 +30,7 @@ static const char *set_file_attr_fmt = "f a"; /* SET FOO.TXT RO */
 static void print_vol_size(int8_t vol_id)
 {
     VolStat ds;
+
     if (vstat(vol_id, &ds) == EOK)
         printf("%c: %uk\n", 'A' + vol_id, ds.total_blocks);
 }
@@ -37,6 +38,7 @@ static void print_vol_size(int8_t vol_id)
 static CmdErr set_mount(int8_t vol_id)
 {
     int rc = mount(vol_id);
+
     if (rc != EOK)
         return cmderr_bdos(vol_id, rc);
 
@@ -47,10 +49,12 @@ static CmdErr set_mount(int8_t vol_id)
 static CmdErr set_extend(int8_t vol_id, char *arg)
 {
     int n;
+
     if (!parse_int(arg, &n) || n <= 0 || n > (int)USHRT_MAX)
         return cmderr_bdos(vol_id, EINVAL);
 
     int rc = extend(vol_id, (uint16_t)n);
+
     if (rc != EOK)
         return cmderr_bdos(vol_id, rc);
 
@@ -63,10 +67,12 @@ static CmdErr set_umount(int8_t vol_id, int8_t prompt_vol_id, const char *arg)
     if (arg)
     {
         int n;
+
         if (!parse_int(arg, &n) || n <= 0 || n > (int)USHRT_MAX)
             return cmderr_bdos(vol_id, EINVAL);
 
         int rc = shrink(vol_id, (uint16_t)n);
+
         if (rc != EOK)
             return cmderr_bdos(vol_id, rc);
 
@@ -78,6 +84,7 @@ static CmdErr set_umount(int8_t vol_id, int8_t prompt_vol_id, const char *arg)
         return cmderr_bdos(vol_id, EPERM);
 
     int rc = unmount(vol_id);
+
     if (rc != EOK)
         return cmderr_bdos(vol_id, rc);
 
@@ -153,6 +160,7 @@ static CmdErr cmd_set(FsContext *ctx, int argc, char **argv)
         return cmderr_syntax(NULL);
 
     FileRef ref;
+
     if (!parse_fileref(ctx, argv[1], &ref))
         return cmderr_syntax(NULL);
 

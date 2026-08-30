@@ -21,7 +21,7 @@ the free pool.
 
 <img src="images/disk-format.png" alt="Disk format" width="100%">
 
-## Sector 0 — Boot sector
+## Sector 0: Boot sector
 
 | Offset | Size | Field | Constant | Value |
 |---|---:|---|---|---|
@@ -41,7 +41,7 @@ the free pool.
 | 0x01E | u8[8] | Platform name | `S0_PLATFORM` | varies |
 | 0x1FE | u16 | Boot signature | `S0_SIG` | `0xAA55` |
 
-## Volume map — sector 1
+## Volume map: sector 1
 
 The VMAP is the authoritative record of volume layout. It is written as a
 single sector when volume layout or volume attributes change.
@@ -63,7 +63,7 @@ Block `i` occupies:
 A single volume can be grown at runtime (`bd_extend` / `EX`) to consume
 blocks freed by shrinking or unmounting the others, up to and including the
 entire grid. Because of that, the grid itself can never be provisioned
-larger than what one volume is allowed to address — any blocks beyond a
+larger than what one volume is allowed to address. Any blocks beyond a
 single volume's cap would be permanently unreachable by every volume, no
 matter how the others are resized. The maximum grid size is therefore:
 
@@ -110,7 +110,7 @@ The volume header occupies logical LBA 0.
 | 0x006 | u16 | Root directory LBA | `VHDR_ROOT_LBA_OFF` | `1` |
 | 0x008 | u16 | Data area start LBA | `VHDR_DATA_LBA_OFF` | `17` |
 | 0x00A | u16 | Total data blocks | `VHDR_TOT_BLKS_OFF` | varies |
-| 0x1FE | u16 | Signature | — | `0xAA55` |
+| 0x1FE | u16 | Signature | - | `0xAA55` |
 
 The volume layout is:
 
@@ -175,5 +175,5 @@ uses 1 KB.
 
 | Bit | Value | Meaning |
 |---:|---:|---|
-| 0 | `0x01` | `FILE_ATTR_READ_ONLY` — Rejects writes/delete |
-| 1 | `0x02` | `FILE_ATTR_SYSTEM` — Hidden from `DIR`; found by command search in user 0 of the current drive and `A:` |
+| 0 | `0x01` | `FILE_ATTR_READ_ONLY`: rejects writes/delete |
+| 1 | `0x02` | `FILE_ATTR_SYSTEM`: hidden from `DIR`; found by command search in user 0 of the current drive and `A:` |

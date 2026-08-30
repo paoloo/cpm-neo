@@ -10,7 +10,7 @@ its RISC-V flash boot path.
 | CP/M Neo | Pico 2 (RP2350) |
 | --- | --- |
 | Console | UART0 — GPIO0 (TX), GPIO1 (RX), 115200 8N1 |
-| CPU / RAM | Hazard3 RISC-V core, CP/M RAM mapped at SRAM `0x20000000` (up to 512 KB) |
+| CPU / RAM | Hazard3 RISC-V core, 256 KB CP/M RAM mapped at SRAM `0x20000000` |
 | Disk A–D | CP/M disk image in the 4 MB flash at offset `0x4000` (persistent) |
 | Time | TIMER0 @ 1 MHz tick (milliseconds) |
 
@@ -27,7 +27,7 @@ and `python3`:
 
 ```sh
 make -C sysgen
-./sysgen/build/sysgen new --disk-size=2048K --mem=256K --platform=pico2 --arch=riscv32
+./sysgen/build/sysgen new --disk-size=2048K --platform=pico2
 python3 platform/pico2/mkuf2.py
 ```
 
@@ -40,8 +40,8 @@ Outputs in `sysgen/build/pico2/`:
 
 Notes:
 
-- `--mem` can be up to `512K` (TPA ≈ 484 KB); `256K` keeps everything inside
-  the parity-free SRAM banks and is a good default.
+- RAM is set to 256 KB in `platform/pico2/config.sh`, keeping the image inside
+  the parity-free SRAM banks. Change `RAM_SIZE` there for a different layout.
 - `--disk-size` follows the CP/M Neo format limit (`2081K` max); the pico2
   flash easily fits it (`mkuf2.py` validates the final image anyway).
 
@@ -71,10 +71,10 @@ image (the disk image is part of the flash).
 - `boot_extra.S` — picobin `EXE1` image definition (RISC-V / RP2350) so the
   bootrom boots the image directly; RP2350 needs no second-stage bootloader.
 - `linker_boot.ld` — boot code at `0x10000100`, image def at `0x10000000`.
-- `platform_flags.sh` — maps the CP/M address space onto SRAM:
-  `__ram_base=0x20000000`, `__tpa_base=0x20000100`, `-DTPA_LOAD_ADDR=0x20000100`.
+- `config.sh` — selects RISC-V and maps the CP/M address space onto SRAM at
+  `0x20000000`; the build derives the TPA base as `0x20000100`.
 - The kernel, CCP and apps are built by the normal sysgen flow; only the
-  address-space defsyms differ from platforms with RAM at address 0.
+  platform memory map differs from targets with RAM at address 0.
 
 Debug tip: `picotool` (if installed) can inspect the image:
 `picotool info -a build/pico2/cpmx-pico2.bin -t bin`.

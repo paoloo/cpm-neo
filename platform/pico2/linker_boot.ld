@@ -14,7 +14,7 @@
  * empty TPA area of SRAM; the TPA is only populated once the kernel starts
  * exec'ing programs, long after boot has finished.  The kernel itself is
  * loaded at the physical SRAM address stored in S0_KERN_LOAD (the kernel is
- * linked with __ram_base=0x20000000, so S0 already holds physical addresses).
+ * linked from RAM_BASE=0x20000000, so S0 already holds physical addresses).
  */
 
 ENTRY(_boot_start)

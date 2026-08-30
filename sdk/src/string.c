@@ -1,13 +1,13 @@
-/* 
+/*
  * libc/string.c
  * CP/M Neo — string and memory utilities (software only)
-*/
+ */
 
 #include "string.h"
 
 void *memcpy(void *dst, const void *src, size_t n)
 {
-    uint8_t       *d = (uint8_t *)dst;
+    uint8_t *d = (uint8_t *)dst;
     const uint8_t *s = (const uint8_t *)src;
 
     while (n--)
@@ -18,7 +18,7 @@ void *memcpy(void *dst, const void *src, size_t n)
 
 void *memmove(void *dst, const void *src, size_t n)
 {
-    uint8_t       *d = (uint8_t *)dst;
+    uint8_t *d = (uint8_t *)dst;
     const uint8_t *s = (const uint8_t *)src;
 
     if (d < s)
@@ -30,6 +30,7 @@ void *memmove(void *dst, const void *src, size_t n)
     {
         d += n;
         s += n;
+
         while (n--)
             *(--d) = *(--s);
     }
@@ -64,6 +65,7 @@ int memcmp(const void *a, const void *b, size_t n)
 {
     const uint8_t *x = (const uint8_t *)a;
     const uint8_t *y = (const uint8_t *)b;
+
     for (size_t i = 0; i < n; i++)
     {
         if (x[i] != y[i])
@@ -129,6 +131,7 @@ int strncmp(const char *a, const char *b, size_t n)
 char *strcpy(char *dst, const char *src)
 {
     char *d = dst;
+
     while ((*d++ = *src++))
         ;
     return dst;
@@ -156,8 +159,10 @@ char *strncpy(char *dst, const char *src, size_t n)
 char *strncat(char *dst, const char *src, size_t n)
 {
     char *d = dst;
+
     while (*d)
         d++;
+
     while (n-- && *src)
         *d++ = *src++;
     *d = '\0';
@@ -217,8 +222,10 @@ int strncasecmp(const char *a, const char *b, size_t n)
     {
         int da = toupper((unsigned char)a[i]);
         int db = toupper((unsigned char)b[i]);
+
         if (da != db)
             return da - db;
+
         if (a[i] == '\0')
             return 0;
     }
@@ -232,6 +239,7 @@ int strcasecmp(const char *a, const char *b)
     {
         int da = toupper((unsigned char)*a);
         int db = toupper((unsigned char)*b);
+
         if (da != db)
             return da - db;
         a++;

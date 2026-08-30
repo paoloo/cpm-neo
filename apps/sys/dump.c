@@ -9,6 +9,7 @@ static CmdErr cmd_dump(FsContext *ctx, int argc, char **argv)
         return cmderr_syntax(NULL);
 
     int fd = open(argv[1], "r");
+
     if (fd < 0)
     {
         if (fd == ENOENT)
@@ -36,6 +37,7 @@ static CmdErr cmd_dump(FsContext *ctx, int argc, char **argv)
             {
                 if (i == 8 && chunk_size > 8)
                     printf(" ");
+
                 if (i < chunk_size)
                     printf(" %02X", chunk[i]);
                 else

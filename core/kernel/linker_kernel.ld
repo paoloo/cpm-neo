@@ -1,16 +1,13 @@
 ENTRY(_entry)
 
-/* __KERN_START and __mem_size supplied via --defsym= in the two-pass build.
- * __KERN_START is the physical load address of the kernel; for platforms
- * whose CP/M RAM is not mapped at physical 0, build_disk.sh passes
- * --defsym=__ram_base=<phys base> and computes __KERN_START from the
- * physical io_base.  Default __ram_base=0 preserves the flat model. */
-__ram_base     = DEFINED(__ram_base) ? __ram_base : 0;
-__io_size      = 0x0100;
-__io_base      = __ram_base + __mem_size - __io_size;
+/* __KERN_START, __io_base, __ram_top and __tpa_base are supplied via
+ * --defsym= in the two-pass build.  They are derived by build_disk.sh from
+ * the platform config: __io_base is the MMIO window base, __ram_top is the
+ * top of usable RAM (min(RAM_BASE + RAM_SIZE, IO_BASE)) and __tpa_base is the
+ * CP/M TPA load address (RAM_BASE + 0x100). */
 
 MEMORY {
-    KRAM    (rwx) : ORIGIN = __KERN_START, LENGTH = __io_base - __KERN_START
+    KRAM    (rwx) : ORIGIN = __KERN_START, LENGTH = __ram_top - __KERN_START
 }
 
 __kernel_base = ORIGIN(KRAM);
@@ -52,15 +49,18 @@ SECTIONS {
 
     __kernel_total = ABSOLUTE(_kend) - ORIGIN(KRAM);
 
-    /* The kernel and the CCP/apps share a single stack at the top of the
-     * TPA (apps resolve _stack_top to __kernel_base via linker_sdk.ld).
+    /* The kernel, the CCP, and user programs share a single stack at the
+     * top of the TPA (the top slice of the TPA region, at __kernel_base).
      * There is no dedicated kernel stack: syscalls are plain jump-table
      * calls that run on the caller's stack, and there are no interrupt or
      * trap handlers, so a private kernel stack is only ever needed during
-     * the initial boot — which runs on this same shared stack (growing
-     * down into the then-empty TPA). */
-    _stack_top = ORIGIN(KRAM);
+     * the initial boot — which runs on this same stack (growing down into
+     * the then-empty TPA).  These symbols are owned here, in the kernel
+     * link, and flow to the CCP/apps via --just-symbols. */
+    __stack_size = 0x1000;
+    __stack_top  = ORIGIN(KRAM);
+    _stack_top   = __stack_top;
 
-    ASSERT(_kend <= __io_base, "ERROR: kernel image reaches IO_AREA")
+    ASSERT(_kend <= __ram_top, "ERROR: kernel image reaches top of usable RAM")
     /DISCARD/ : { *(.comment) *(.eh_frame) *(.note*) }
 }

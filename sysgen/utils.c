@@ -1,22 +1,22 @@
 #include "utils.h"
-#include "kernel_abi.h"
 #include "bdos.h"
 #include "disk.h"
+#include "kernel_abi.h"
 #include "sysgen.h"
 
+#include <ctype.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
-#include <ctype.h>
 
 #if defined(_WIN32)
 #include <windows.h>
 #else
 #include <dirent.h>
-#include <sys/stat.h>
 #include <errno.h>
 #include <spawn.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 extern char **environ;
 #endif
@@ -31,13 +31,16 @@ void sysgen_init_paths(const char *argv0)
     const char *slash = strrchr(argv0, '/');
 #if defined(_WIN32)
     const char *bslash = strrchr(argv0, '\\');
+
     if (bslash && (!slash || bslash > slash))
         slash = bslash;
 #endif
+
     if (!slash)
         return;
 
     int len = (int)(slash - argv0);
+
     if (len >= SYSGEN_PATH_MAX)
         len = SYSGEN_PATH_MAX - 1;
 
@@ -102,21 +105,25 @@ const char *flag_value(int argc, char **argv, const char *name, int *seen)
 {
     size_t n = strlen(name);
     *seen = 0;
+
     for (int i = 0; i < argc; i++)
     {
         if (argv[i][0] != '-')
             continue;
+
         if (strncmp(argv[i], name, n) == 0 && argv[i][n] == '=')
         {
             *seen = 1;
             return argv[i] + n + 1;
         }
+
         if (strncmp(argv[i], name, n) == 0 && argv[i][n] == '\0')
         {
             *seen = 1;
             return NULL;
         }
     }
+
     return NULL;
 }
 
@@ -126,12 +133,14 @@ int reject_unknown_flags(int argc, char **argv, const char *const *allowed)
     {
         if (argv[i][0] != '-')
             continue;
+
         int ok = 0;
+
         for (int a = 0; allowed[a]; a++)
         {
             size_t n = strlen(allowed[a]);
-            if (strncmp(argv[i], allowed[a], n) == 0 &&
-                (argv[i][n] == '=' || argv[i][n] == '\0'))
+
+            if (strncmp(argv[i], allowed[a], n) == 0 && (argv[i][n] == '=' || argv[i][n] == '\0'))
             {
                 ok = 1;
                 break;
@@ -144,12 +153,14 @@ int reject_unknown_flags(int argc, char **argv, const char *const *allowed)
             return 1;
         }
     }
+
     return 0;
 }
 
 int collect_positional(int argc, char **argv, const char **out, int max_out)
 {
     int n = 0;
+
     for (int i = 0; i < argc; i++)
     {
         if (argv[i][0] == '-' && argv[i][1] == '-')
@@ -159,6 +170,7 @@ int collect_positional(int argc, char **argv, const char **out, int max_out)
             out[n] = argv[i];
         n++;
     }
+
     return n;
 }
 
@@ -169,6 +181,7 @@ const char *resolve_disk(int argc, char **argv, char *buf, size_t n)
 {
     int has = 0;
     const char *v = flag_value(argc, argv, "--disk", &has);
+
     if (has && v && *v)
         snprintf(buf, n, "%s", v);
     else
@@ -184,6 +197,7 @@ long parse_sized_kb(const char *s)
 
     char *end = NULL;
     long v = strtol(s, &end, 10);
+
     if (end == s || *end == '\0')
         return -1;
 
@@ -203,17 +217,20 @@ int parse_vn(const char *s, int *vol, int *user)
     }
 
     char c = (char)toupper((unsigned char)s[0]);
+
     if (c < 'A' || c > 'D')
         return -1;
 
     *vol = c - 'A';
     int u = 0;
+
     for (int i = 1; s[i]; i++)
     {
         if (!isdigit((unsigned char)s[i]))
             return -1;
 
         u = u * 10 + (s[i] - '0');
+
         if (u > USER_AREA_MAX)
             return -1;
     }
@@ -228,22 +245,26 @@ int dir_exists(const char *p)
     DWORD a = GetFileAttributesA(p);
     return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY);
 }
+
 int file_exists(const char *p)
 {
     DWORD a = GetFileAttributesA(p);
     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
 }
+
 #else
 int dir_exists(const char *p)
 {
     struct stat st;
     return stat(p, &st) == 0 && S_ISDIR(st.st_mode);
 }
+
 int file_exists(const char *p)
 {
     struct stat st;
     return stat(p, &st) == 0 && S_ISREG(st.st_mode);
 }
+
 #endif
 
 void hr(char *out, size_t n, uint32_t bytes)
@@ -251,6 +272,7 @@ void hr(char *out, size_t n, uint32_t bytes)
     if (bytes >= 1024 * 1024)
     {
         uint32_t mb = bytes / (1024 * 1024);
+
         if (bytes % (1024 * 1024) == 0)
             snprintf(out, n, "%u MB", mb);
         else
@@ -259,6 +281,7 @@ void hr(char *out, size_t n, uint32_t bytes)
     else if (bytes >= 1024)
     {
         uint32_t kb = bytes / 1024;
+
         if (bytes % 1024 == 0)
             snprintf(out, n, "%u KB", kb);
         else
@@ -293,14 +316,18 @@ static int scan_dir(const char *dir, ComEntry *list, int cap)
     _snprintf(pat, sizeof pat, "%s\\*", dir);
     WIN32_FIND_DATAA fd;
     HANDLE h = FindFirstFileA(pat, &fd);
+
     if (h == INVALID_HANDLE_VALUE)
         return 0;
+
     do
     {
         if (n >= cap)
             break;
+
         if (!fd.cFileName[0] || fd.cFileName[0] == '.')
             continue;
+
         _snprintf(list[n].path, sizeof list[n].path, "%s\\%s", dir, fd.cFileName);
         _snprintf(list[n].name, sizeof list[n].name, "%s", fd.cFileName);
         list[n].is_dir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
@@ -309,9 +336,12 @@ static int scan_dir(const char *dir, ComEntry *list, int cap)
     FindClose(h);
 #else
     DIR *d = opendir(dir);
+
     if (!d)
         return 0;
+
     struct dirent *de;
+
     while ((de = readdir(d)) && n < cap)
     {
         if (de->d_name[0] == '.')
@@ -321,6 +351,7 @@ static int scan_dir(const char *dir, ComEntry *list, int cap)
         snprintf(full, sizeof full, "%s/%s", dir, de->d_name);
 
         struct stat st;
+
         if (stat(full, &st) != 0)
             continue;
 
@@ -341,6 +372,7 @@ static int scan_dir(const char *dir, ComEntry *list, int cap)
 int has_source_ext(const char *name)
 {
     const char *e = strrchr(name, '.');
+
     if (!e)
         return 0;
 
@@ -352,7 +384,9 @@ int for_each_subdir(const char *dir, SysgenCallback cb, void *ud)
 {
     ComEntry list[512];
     int n = scan_dir(dir, list, 512);
+
     for (int i = 0; i < n; i++)
+
         if (list[i].is_dir)
             cb(list[i].path, list[i].name, ud);
 
@@ -364,7 +398,9 @@ int for_each_source_file(const char *dir, SysgenCallback cb, void *ud)
 {
     ComEntry list[512];
     int n = scan_dir(dir, list, 512);
+
     for (int i = 0; i < n; i++)
+
         if (!list[i].is_dir && has_source_ext(list[i].name))
             cb(list[i].path, list[i].name, ud);
 
@@ -375,6 +411,7 @@ int dir_has_sources(const char *dir)
 {
     ComEntry list[512];
     int n = scan_dir(dir, list, 512);
+
     for (int i = 0; i < n; i++)
     {
         if (list[i].is_dir)
@@ -387,6 +424,7 @@ int dir_has_sources(const char *dir)
             return 1;
         }
     }
+
     return 0;
 }
 
@@ -395,7 +433,9 @@ int dir_has_subdirs(const char *dir)
 {
     ComEntry list[512];
     int n = scan_dir(dir, list, 512);
+
     for (int i = 0; i < n; i++)
+
         if (list[i].is_dir)
             return 1;
 
@@ -407,7 +447,9 @@ int for_each_flat_file(const char *dir, SysgenCallback cb, void *ud)
 {
     ComEntry list[512];
     int n = scan_dir(dir, list, 512);
+
     int files = 0;
+
     for (int i = 0; i < n; i++)
     {
         if (list[i].is_dir)
@@ -426,8 +468,10 @@ int mkdir_p(const char *path)
     char tmp[SYSGEN_PATH_MAX];
     _snprintf(tmp, sizeof tmp, "%s", path);
     size_t len = strlen(tmp);
+
     if (len == 0)
         return -1;
+
     for (char *p = tmp + 1; *p; p++)
     {
         if (*p == '\\' || *p == '/')
@@ -438,8 +482,10 @@ int mkdir_p(const char *path)
             *p = save;
         }
     }
+
     if (_mkdir(tmp) != 0 && errno != EEXIST)
         return -1;
+
     return 0;
 #else
     char tmp[SYSGEN_PATH_MAX];
@@ -454,6 +500,7 @@ int mkdir_p(const char *path)
         if (*p == '/')
         {
             *p = '\0';
+
             if (mkdir(tmp, 0755) != 0 && errno != EEXIST)
             {
                 *p = '/';
@@ -462,6 +509,7 @@ int mkdir_p(const char *path)
             *p = '/';
         }
     }
+
     if (mkdir(tmp, 0755) != 0 && errno != EEXIST)
         return -1;
 
@@ -473,6 +521,7 @@ int open_disk(const char *path)
 {
     uint8_t *buf;
     uint32_t len;
+
     if (read_file(path, &buf, &len) != 0)
     {
         err("cannot read '%s'", path);
@@ -520,6 +569,7 @@ int mount_vol(int8_t vol)
 
         return 0;
     }
+
     if (bd_bind(vol) != EOK)
     {
         err("volume %c: cannot mount", 'A' + vol);
@@ -534,12 +584,15 @@ int mount_vol(int8_t vol)
 static int append_quoted_arg(char *cmdline, size_t cap, const char *arg)
 {
     size_t len = strlen(cmdline);
+
     if (len && len + 1 < cap)
         cmdline[len++] = ' ';
+
     if (len >= cap)
         return -1;
 
     size_t pos = len;
+
     if (pos + 1 >= cap)
         return -1;
     cmdline[pos++] = '"';
@@ -547,11 +600,14 @@ static int append_quoted_arg(char *cmdline, size_t cap, const char *arg)
     for (const char *p = arg; *p;)
     {
         size_t backslashes = 0;
+
         while (*p == '\\')
         {
             backslashes++;
             p++;
         }
+
+
         if (*p == '\0')
         {
             for (size_t i = 0; i < backslashes * 2; i++)
@@ -560,8 +616,11 @@ static int append_quoted_arg(char *cmdline, size_t cap, const char *arg)
                     return -1;
                 cmdline[pos++] = '\\';
             }
+
             break;
         }
+
+
         if (*p == '"')
         {
             for (size_t i = 0; i < backslashes * 2 + 1; i++)
@@ -570,6 +629,8 @@ static int append_quoted_arg(char *cmdline, size_t cap, const char *arg)
                     return -1;
                 cmdline[pos++] = '\\';
             }
+
+
             if (pos + 1 >= cap)
                 return -1;
             cmdline[pos++] = '"';
@@ -583,11 +644,15 @@ static int append_quoted_arg(char *cmdline, size_t cap, const char *arg)
                     return -1;
                 cmdline[pos++] = '\\';
             }
+
+
             if (pos + 1 >= cap)
                 return -1;
             cmdline[pos++] = *p++;
         }
     }
+
+
     if (pos + 2 >= cap)
         return -1;
     cmdline[pos++] = '"';
@@ -599,6 +664,7 @@ int spawn_and_wait(char *const argv[])
 {
     char cmdline[8192];
     cmdline[0] = '\0';
+
     for (int i = 0; argv[i]; i++)
     {
         if (append_quoted_arg(cmdline, sizeof cmdline, argv[i]) != 0)
@@ -631,6 +697,7 @@ int spawn_and_wait(char *const argv[])
         err("'%s' exited with status %lu", argv[0], (unsigned long)code);
         return -1;
     }
+
     return 0;
 }
 
@@ -640,6 +707,7 @@ int spawn_and_wait(char *const argv[])
 {
     pid_t pid;
     int rc = posix_spawnp(&pid, argv[0], NULL, NULL, argv, environ);
+
     if (rc != 0)
     {
         err("failed to launch '%s': %s", argv[0], strerror(rc));
@@ -647,6 +715,7 @@ int spawn_and_wait(char *const argv[])
     }
 
     int status = 0;
+
     if (waitpid(pid, &status, 0) < 0)
     {
         err("waitpid on '%s' failed: %s", argv[0], strerror(errno));
@@ -658,7 +727,7 @@ int spawn_and_wait(char *const argv[])
         err("'%s' exited abnormally or with a nonzero status", argv[0]);
         return -1;
     }
-    
+
     return 0;
 }
 

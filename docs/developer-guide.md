@@ -5,7 +5,7 @@
 This page covers the SDK, building your own programs, and adding a new hardware
 platform.
 
-### `sysgen install` — Compile and install a source file or folder
+### `sysgen install`: Compile and install a source file or folder
 
 Put your program's source files in a folder, or provide a single source file, and let `sysgen` compile and install it:
 
@@ -15,7 +15,7 @@ $ ./sysgen/build/sysgen install myapp --dst=A0 --attr=RW
 
 - `install` accepts `.c`, `.s`, and `.S` sources only.
 
-### `sysgen add` — Copy any file
+### `sysgen add`: Copy any file
 
 `add` copies any file into the image named by its 8.3 basename.
 
@@ -25,12 +25,12 @@ $ ./sysgen/build/sysgen add hello.txt --dst=A0 --attr=RW
 
 ### SDK surface
 
-- `cpm.h` — umbrella header (syscalls + kernel ABI types).
-- `syscall.h` — `sys_open`/`sys_read`/… wrappers over the kernel's
+- `cpm.h`: umbrella header (syscalls + kernel ABI types).
+- `syscall.h`: `sys_open`/`sys_read`/… wrappers over the kernel's
   `SyscallTable` (see [Syscall Reference](syscall-reference.md)).
-- `kernel_abi.h` — shared ABI: the `SyscallTable` type, `SysInfo`, disk
+- `kernel_abi.h`: shared ABI: the `SyscallTable` type, `SysInfo`, disk
   constants (VMAP/block layout), env slot layout, `FD_*` handles.
-- `bios.h` — BIOS interface (see below).
+- `bios.h`: BIOS interface (see below).
 
 ## The BIOS layer
 
@@ -39,46 +39,142 @@ $ ./sysgen/build/sysgen add hello.txt --dst=A0 --attr=RW
 | `int bios_init(void)` | Initialize hardware; 0 on success |
 | `void bios_conout(int c)` | Write a character to the console |
 | `int bios_conin(void)` | Blocking console read |
-| `int bios_const(void)` | Console status (0xFF = key ready) |
+| `int bios_constat(void)` | Console status (0xFF = key ready) |
 | `void bios_consize(uint8_t *cw, uint8_t *ch)` | Console dimensions |
 | `int bios_read(uint16_t lba, uint8_t *buf)` | Read one 512-byte sector |
 | `int bios_write(uint16_t lba, const uint8_t *buf)` | Write one sector |
 | `uint32_t bios_time(void)` | platform-defined time service |
 
 A program that needs to touch hardware directly can use the SDK's `sys_dev()`
-helper, which reads/writes a 32-bit memory-mapped I/O register in
-the window at `__io_base`. The register and command offsets are encoded with the
-`IOCTL_*` macros in `kernel_abi.h`; the in/out `data` pointer carries the value
-being written or read (it is required, and may not be `NULL`).
+helper, which reads/writes a 32-bit memory-mapped I/O register in the window
+at `__io_base` (the platform's MMIO base from `platform/<name>/config.sh`).
+The register and command offsets are encoded with the `IOCTL_*` macros in
+`kernel_abi.h`; the in/out `data` pointer carries the value being written or
+read (it is required, and may not be `NULL`).
 
 ## Adding a platform
 
-1. Create `platform/<name>/bios.c` implementing the functions in `bios.h`.
-2. Build with `sysgen new ... --platform=<name> --arch=<isa>`.
+A platform is a self-contained `platform/<name>/` directory:
+
+1. `config.sh` declares the platform facts:
+   - `ID` — the 8-char max platform id shown by the OS and stamped into
+     sector 0 (`S0_PLATFORM`). It is the platform's identity for `--platform`,
+     so it is required. e.g. `platform/blackpill-411fe/` with `ID="BPF411E"`.
+   - `ARCH` — the ISA directory under `arch/` (selects the toolchain)
+   - `RAM_SIZE` — total RAM in bytes (hex), e.g. `0x10000` = 64 KB
+   - `RAM_BASE` — base address of the RAM region holding CP/M Neo
+   - `IO_BASE` — base address of the peripheral MMIO window
+2. `bios.c` implements the functions in `bios.h`.
+3. Build with `sysgen new ... --platform=<id>`.
+
+### Platform lookup
+
+`--platform` addresses a platform purely by its `ID`:
+
+- `build_disk.sh` scans every `platform/*/config.sh` and a platform matches
+  when its `ID` equals the argument;
+- an `ID` declared by more than one platform is an error
+  (`duplicate platform ID ...`);
+- an unmatched id fails with `unknown platform '<id>'`.
+
+### The BIOS contract
+
+Each platform implements the functions declared in `core/kernel/bios.h`
+(console: `bios_conout`, `bios_conin`, `bios_constat`, `bios_consize`,
+`bios_init`; storage: `bios_read`, `bios_write`; time: `bios_time`) directly in
+`bios.c`.
+
+A platform that supports several storage devices can select one at build time
+inside the storage functions:
+
+```c
+int bios_read(uint16_t lba, uint8_t *buf)
+{
+#ifdef USE_SDCARD
+    return sdcard_read(lba, buf);
+#else
+    return flash_read(lba, buf);
+#endif
+}
+```
+
+Driver code may be organized within `bios.c` however the platform likes.
+
+See [Architecture](architecture.md) for the boot and build flow.
+
+## Adding an architecture
+
+An architecture is a self-contained `arch/<isa>/` directory. The build scripts
+source `arch/<isa>/config.sh` automatically.
+
+The `arch/<isa>/` directory needs four files:
+
+| File | Purpose |
+| --- | --- |
+| `config.sh` | Toolchain metadata for this ISA |
+| `boot.S` | Architecture bootloader (loads the kernel and jumps to it) |
+| `linker_boot.ld` | Bootloader memory layout (first 1 KB of RAM) |
+| `crt0.S` | C runtime startup (kernel, CCP, and apps): sets the stack pointer to the top of the shared stack, clears `.bss`, and jumps to `_start` |
+
+### `config.sh` contract
+
+`config.sh` is sourced by `build_disk.sh` and `app_build.sh`. It must set:
+
+| Variable | Meaning |
+| --- | --- |
+| `CROSS_COMPILE` | Cross-compiler prefix, e.g. `riscv64-unknown-elf-` |
+| `ARCH_CFLAGS` | `-march`/`-mabi` flags for the target, e.g. `-march=rv32im -mabi=ilp32` |
+| `LD_EMULATION` | Linker emulation for the target, e.g. `elf32lriscv` |
+
+The RISC-V example (`arch/riscv32/config.sh`):
+
+```sh
+CROSS_COMPILE=${CROSS_COMPILE:-riscv64-unknown-elf-}
+ARCH_CFLAGS="-march=rv32im -mabi=ilp32"
+LD_EMULATION="elf32lriscv"
+```
+
+### Bootloader conventions
+
+`boot.S` calls the platform BIOS (`bios_read`, `bios_conout`) to load the
+kernel. Sector-0 field offsets are shared between the bootloader, kernel, and
+sysgen via `core/kernel/s0_layout.h`. The toolchain must produce an image with
+`ld -m $LD_EMULATION` as done by `build_disk.sh` and `app_build.sh`.
+
+## Building a program with the SDK
+
+Any program can be compiled in a source folder and installed with `sysgen
+install`:
+
+```sh
+$ ./sysgen/build/sysgen install myapp --dst=A0 --attr=RW
+```
+
+See [syscall-reference.md](syscall-reference.md) for the API.
 
 Optional platform hooks (all picked up automatically by the build scripts):
 
 | File | Role |
 |------|------|
+| `platform/<name>/config.sh` | Required — declares `ID`, `ARCH`, `RAM_SIZE`, `RAM_BASE`, and `IO_BASE` |
 | `platform/<name>/bios.c` | Required — the BIOS implementation |
-| `platform/<name>/platform_flags.sh` | Sourced by the build: may set `PLATFORM_CFLAGS` (extra compiler flags) and `PLATFORM_LDSYMS` (extra linker `--defsym`s) |
 | `platform/<name>/linker_boot.ld` | Overrides `arch/<isa>/linker_boot.ld` for the bootloader link |
 | `platform/<name>/boot_extra.S` | Extra object linked into the bootloader (placed in its own `.image_def` section in the boot binary) |
 
 Platforms whose CP/M RAM is not mapped at physical address 0 (e.g. the Pico
-2's SRAM at `0x20000000`) should set in `platform_flags.sh`:
+2's SRAM at `0x20000000`) express that directly in `config.sh`:
 
 ```sh
-PLATFORM_CFLAGS="-DTPA_LOAD_ADDR=<ram_base>+0x100"
-PLATFORM_LDSYMS="--defsym=__ram_base=<ram_base> --defsym=__tpa_base=<ram_base>+0x100"
+ID="myboard"
+ARCH=riscv32
+RAM_SIZE=0x40000
+RAM_BASE=0x20000000
+IO_BASE=0x2003FF00
 ```
 
-The kernel is then linked at physical addresses, and the bootloader needs no
-address translation: `S0_KERN_LOAD` already carries the physical load address.
-
-The platform name is persisted to `sysgen/build/.platform` by
-`build_disk.sh`, so `app_build.sh` (`sysgen install`) applies the same flags
-to user applications.
+The build derives `__tpa_base` as `RAM_BASE + 0x100`, links the kernel at
+physical addresses, and stores the platform directory in
+`sysgen/build/.platform_dir` so later `sysgen install` calls use the same ISA.
 
 See [platform/pico2](../platform/pico2/README.md) for a complete hardware
 platform example.

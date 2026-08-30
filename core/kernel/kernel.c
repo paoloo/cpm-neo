@@ -15,11 +15,11 @@
 
 #include "kernel.h"
 #include "disk.h"
-#include <limits.h>
-#include "string.h"
 #include "stdlib.h"
+#include "string.h"
+#include <limits.h>
 
-#define JUMP_TPA() ((void (*)(void))(uintptr_t)TPA_LOAD_ADDR)()
+#define JUMP_TPA() ((void (*)(void))(uintptr_t)__tpa_base)()
 
 /* Per-kernel-environment slots: indexed by ENV_* constants.
  * is_ccp gates writes so transient programs cannot corrupt CCP state. */
@@ -53,6 +53,7 @@ extern const SyscallTable g_syscall_table;
 static FsContext parse_prefix(const char **path_ptr)
 {
     FsContext ctx = g_kstate.fs_ctx;
+
     if (!path_ptr || !*path_ptr)
         return ctx;
 
@@ -61,7 +62,9 @@ static FsContext parse_prefix(const char **path_ptr)
     if (isalpha((unsigned char)p[0]))
     {
         int colon = -1;
+
         for (int i = 1; i <= 4 && p[i]; i++)
+
             if (p[i] == ':')
             {
                 colon = i;
@@ -72,12 +75,14 @@ static FsContext parse_prefix(const char **path_ptr)
             return ctx;
 
         ctx.vol_id = toupper((unsigned char)p[0]) - 'A';
+
         if (ctx.vol_id >= VOL_MAX)
             return ctx;
 
         if (colon > 1)
         {
             int ua = 0;
+
             for (int i = 1; i < colon; i++)
             {
                 if (p[i] < '0' || p[i] > '9')
@@ -85,8 +90,10 @@ static FsContext parse_prefix(const char **path_ptr)
 
                 ua = ua * 10 + (p[i] - '0');
             }
+
             if (ua > USER_AREA_MAX)
                 return ctx;
+
             ctx.user_area = (uint8_t)ua;
         }
 
@@ -98,6 +105,7 @@ static FsContext parse_prefix(const char **path_ptr)
     {
         char *ep;
         int ua = strtoi(p, &ep, 10);
+
         if (ep > p && *ep == ':' && ua >= 0 && ua <= USER_AREA_MAX)
         {
             ctx.user_area = (uint8_t)ua;
@@ -141,11 +149,13 @@ static int make_name83(const char *src, char *out)
      * ('.') or end of input.  Unspecified fields stay blank, and blanks
      * match only blanks during directory searches. */
     int i = 0;
+
     while (i < nbase && src[i] != '*')
     {
         out[i] = toupper((unsigned char)src[i]);
         i++;
     }
+
     if (i < nbase)
         memset(out + i, '?', NAME83_BASE - i);
 
@@ -153,12 +163,14 @@ static int make_name83(const char *src, char *out)
     {
         const char *q = dot + 1;
         int e = 0;
+
         while (e < NAME83_EXT && *q && *q != '.' && *q != '*')
         {
             out[NAME83_BASE + e] = toupper((unsigned char)*q);
             e++;
             q++;
         }
+
         if (*q == '*' && e < NAME83_EXT)
             memset(out + NAME83_BASE + e, '?', NAME83_EXT - e);
     }
@@ -173,9 +185,6 @@ static int make_name83(const char *src, char *out)
  */
 int kernel_init(void)
 {
-    if (bios_init() != 0)
-        return EIO;
-
     if (disk_init() != 0)
         return EIO;
 
@@ -198,6 +207,7 @@ int kernel_init(void)
 int kexec(const char *name83, int argc, char **argv, FsContext ctx)
 {
     int fd = bd_open(name83, ctx, 0);
+
     if (fd < 0)
         return fd;
 
@@ -209,7 +219,7 @@ int kexec(const char *name83, int argc, char **argv, FsContext ctx)
         return ENOEXEC;
     }
 
-    if (file_size >= (uint32_t)__kernel_base - TPA_LOAD_ADDR)
+    if (file_size >= (uint32_t)__kernel_base - (uintptr_t)__tpa_base)
     {
         bd_close(fd);
         return E2BIG;
@@ -230,17 +240,20 @@ int kexec(const char *name83, int argc, char **argv, FsContext ctx)
     for (int i = g_kstate.args.argc; i < ARGS_MAX; i++)
         g_kstate.args.argv[i][0] = '\0';
 
-    uint8_t *dest = (uint8_t *)TPA_LOAD_ADDR;
+    uint8_t *dest = (uint8_t *)__tpa_base;
     uint32_t remaining = file_size;
+
     while (remaining > 0)
     {
         uint16_t chunk = (remaining > USHRT_MAX) ? USHRT_MAX : (uint16_t)remaining;
         int n = bd_read(fd, dest, chunk);
+
         if (n <= 0)
         {
             bd_close(fd);
             return EIO;
         }
+
         dest += (uint32_t)n;
         remaining -= (uint32_t)n;
     }
@@ -265,22 +278,26 @@ void kexec_ccp(void)
     g_kstate.kenv.is_ccp = 1;
 
     uint8_t s0[DISK_SECTOR_SIZE];
+
     if (bios_read(0, s0) != 0)
         goto err;
 
     uint16_t lba = *(uint16_t *)(s0 + S0_CCP_LBA);
     uint16_t nsecs = *(uint16_t *)(s0 + S0_CCP_SIZE);
+
     if (nsecs == 0)
         goto err;
 
     for (uint16_t i = 0; i < nsecs; i++)
-        if (bios_read(lba + i, (void *)(TPA_LOAD_ADDR + i * DISK_SECTOR_SIZE)))
+
+        if (bios_read(lba + i, (void *)((uintptr_t)__tpa_base + i * DISK_SECTOR_SIZE)))
             goto err;
 
     JUMP_TPA();
 
 err:
     puts("  CCP ERR");
+
     while (1)
         ;
 }
@@ -290,6 +307,7 @@ int sys_open(const char *name, uint8_t writable)
     FsContext ctx = parse_prefix(&name);
     char n83[12];
     int err = make_name83(name, n83);
+
     if (err != EOK)
         return err;
 
@@ -304,9 +322,10 @@ int sys_read(int fd, void *buf, uint32_t len)
     if (fd_is_stdin(fd))
     {
         if (len == 0)
-            return bios_const();
+            return bios_constat();
 
         uint32_t i = 0;
+
         while (i < len)
         {
             p[i++] = (uint8_t)bios_conin();
@@ -317,18 +336,21 @@ int sys_read(int fd, void *buf, uint32_t len)
 
     int kfd = resolve_file_fd(fd);
     uint32_t total = 0;
+
     while (total < len)
     {
-        uint16_t chunk = (len - total > 0xFFFFu) ? 0xFFFFu
-                                                 : (uint16_t)(len - total);
+        uint16_t chunk = (len - total > 0xFFFFu) ? 0xFFFFu : (uint16_t)(len - total);
         int r = bd_read(kfd, p + total, chunk);
+
         if (r < 0)
             return total ? (int)total : r;
 
         total += (uint32_t)r;
+
         if ((uint16_t)r < chunk)
             break;
     }
+
     return (int)total;
 }
 
@@ -348,15 +370,17 @@ int sys_write(int fd, const void *buf, uint32_t len)
 
     int kfd = resolve_file_fd(fd);
     uint32_t total = 0;
+
     while (total < len)
     {
-        uint16_t chunk = (len - total > 0xFFFFu) ? 0xFFFFu
-                                                 : (uint16_t)(len - total);
+        uint16_t chunk = (len - total > 0xFFFFu) ? 0xFFFFu : (uint16_t)(len - total);
         int w = bd_write(kfd, p + total, chunk);
+
         if (w < 0)
             return total ? (int)total : w;
 
         total += (uint32_t)w;
+
         if ((uint16_t)w < chunk)
             break;
     }
@@ -392,14 +416,11 @@ int sys_findfile(const char *pattern, FileInfo *out, uint16_t start_pos)
     FsContext ctx = parse_prefix(&pattern);
     char n83[12];
     int err = make_name83(pattern, n83);
+
     if (err != EOK)
         return err;
 
-    int rc = bd_find(n83, ctx, out, start_pos);
-    if (rc > 0)
-        return rc;
-
-    return rc;
+    return bd_find(n83, ctx, out, start_pos);
 }
 
 uint32_t sys_getsize(int fd)
@@ -438,6 +459,7 @@ int sys_rename(const char *old, const char *new)
     FsContext nctx = parse_prefix(&new);
 
     /* Renames are only meaningful within one volume and user area. */
+
     if (octx.vol_id != nctx.vol_id || octx.user_area != nctx.user_area)
         return EINVAL;
 
@@ -503,10 +525,9 @@ int sys_dev(uint32_t reg, uint32_t cmd, uint32_t *data)
 
     /* Check the sum's parts first: reg + delta must not wrap around. */
     uint32_t delta = cmd & IOCTL_OFF_MASK;
-    if (reg > (uint32_t)IO_SIZE - 4 ||
-        delta > (uint32_t)IO_SIZE - 4 - reg ||
-        ((reg + delta) & 3) != 0)
 
+    if (reg > (uint32_t)IO_SIZE - 4 || delta > (uint32_t)IO_SIZE - 4 - reg ||
+        ((reg + delta) & 3) != 0)
         return EINVAL;
 
     uint32_t off = reg + delta;
@@ -578,8 +599,9 @@ int sys_info(SysInfo *out)
 
     memcpy(out->platform, &s0[S0_PLATFORM], 8);
     out->platform[8] = '\0';
+    strupr(out->platform);
 
-    out->tpa = ((uint32_t)__kernel_base - TPA_LOAD_ADDR) / 1024;
+    out->tpa = ((uint32_t)__kernel_base - (uintptr_t)__tpa_base) / 1024;
 
     for (int v = 0; v < VOL_MAX; v++)
         out->vol_mounted[v] = (disk_vruns((int8_t)v) > 0) ? 1 : 0;
@@ -610,6 +632,7 @@ int sys_setctx(FsContext ctx)
     if (ctx.vol_id != g_kstate.fs_ctx.vol_id)
     {
         int rc = bd_bind(ctx.vol_id);
+
         if (rc != EOK)
             return rc;
     }
@@ -675,32 +698,32 @@ int sys_consize(uint8_t *cw, uint8_t *ch)
  * in kernel_abi.h exactly.
  */
 const SyscallTable g_syscall_table = {
-    .open     = sys_open,
-    .read     = sys_read,
-    .write    = sys_write,
-    .close    = sys_close,
-    .exit     = sys_exit,
-    .args     = sys_args,
+    .open = sys_open,
+    .read = sys_read,
+    .write = sys_write,
+    .close = sys_close,
+    .exit = sys_exit,
+    .args = sys_args,
     .findfile = sys_findfile,
-    .getsize  = sys_getsize,
-    .create   = sys_create,
-    .delete   = sys_delete,
-    .rename   = sys_rename,
-    .mount    = sys_mount,
-    .unmount  = sys_unmount,
-    .extend   = sys_extend,
-    .vstat    = sys_vstat,
-    .exec     = sys_exec,
-    .dev      = sys_dev,
+    .getsize = sys_getsize,
+    .create = sys_create,
+    .delete = sys_delete,
+    .rename = sys_rename,
+    .mount = sys_mount,
+    .unmount = sys_unmount,
+    .extend = sys_extend,
+    .vstat = sys_vstat,
+    .exec = sys_exec,
+    .dev = sys_dev,
     .fsetattr = sys_fsetattr,
-    .info     = sys_info,
-    .seek     = sys_seek,
-    .getctx   = sys_getctx,
-    .setctx   = sys_setctx,
-    .getenv   = sys_getenv,
-    .setenv   = sys_setenv,
+    .info = sys_info,
+    .seek = sys_seek,
+    .getctx = sys_getctx,
+    .setctx = sys_setctx,
+    .getenv = sys_getenv,
+    .setenv = sys_setenv,
     .vsetattr = sys_vsetattr,
-    .time     = sys_time,
-    .sync     = sys_sync,
-    .consize  = sys_consize,
+    .time = sys_time,
+    .sync = sys_sync,
+    .consize = sys_consize,
 };

@@ -22,16 +22,16 @@
 #include "string.h"
 
 /* Vol-checked guard: resolves vol_id and returns ENOVOL if unmounted. */
-#define CHECK_VOL(v, vol_id)         \
-    Volume *v = vol_checked(vol_id); \
-    if (!v)                          \
+#define CHECK_VOL(v, vol_id)                                                                       \
+    Volume *v = vol_checked(vol_id);                                                               \
+    if (!v)                                                                                        \
         return ENOVOL;
 
 /* FCB-checked guard: validates fd, then applies CHECK_VOL on its volume. */
-#define CHECK_FCB(f, v, fd) \
-    FCB *f = fcb_get(fd);   \
-    if (!f)                 \
-        return EBADF;       \
+#define CHECK_FCB(f, v, fd)                                                                        \
+    FCB *f = fcb_get(fd);                                                                          \
+    if (!f)                                                                                        \
+        return EBADF;                                                                              \
     CHECK_VOL(v, f->ctx.vol_id);
 
 typedef struct
@@ -143,8 +143,7 @@ static int wildmatch(const char *pat, const char *str)
         }
 
         if (*str != '\0' &&
-            (*pat == '?' ||
-             toupper((unsigned char)*pat) == toupper((unsigned char)*str)))
+            (*pat == '?' || toupper((unsigned char)*pat) == toupper((unsigned char)*str)))
         {
             pat++;
             str++;
@@ -169,8 +168,10 @@ static inline FileKey make_key(Volume *v, const char *n83, uint8_t user)
 static void entry_to_name(const uint8_t *entry, char *out)
 {
     int base_len = NAME83_BASE, ext_len = NAME83_EXT, out_pos = 0;
+
     while (base_len > 0 && entry[base_len - 1] == ' ')
         base_len--;
+
     while (ext_len > 0 && entry[NAME83_BASE + ext_len - 1] == ' ')
         ext_len--;
 
@@ -180,6 +181,7 @@ static void entry_to_name(const uint8_t *entry, char *out)
     if (ext_len > 0)
     {
         out[out_pos++] = '.';
+
         for (int i = 0; i < ext_len; i++)
             out[out_pos++] = entry[NAME83_BASE + i];
     }
@@ -209,8 +211,10 @@ static Volume *vol_for(int8_t vol_id)
 static Volume *vol_checked(int8_t vol_id)
 {
     Volume *v = vol_for(vol_id);
+
     if (!v || !v->mounted)
         return NULL;
+
     return v;
 }
 
@@ -236,6 +240,7 @@ static int vol_flush(void)
     {
         if (disk_vwrite(g_bd.wb_vol, g_bd.wb_lba, g_bd.wb_buf) != EOK)
             return EIO;
+
         g_bd.wb_valid = 0;
     }
 
@@ -250,6 +255,7 @@ static int vol_write(Volume *v, uint16_t lba, const uint8_t *buf)
     if (g_bd.wb_valid && !(g_bd.wb_vol == v->id && g_bd.wb_lba == lba))
     {
         int rc = vol_flush();
+
         if (rc != EOK)
             return rc;
     }
@@ -269,23 +275,41 @@ static int bd_write_header(Volume *v)
     if (vol_read(v, 0, hdr) != EOK)
         return EIO;
 
-    write16(&hdr[VHDR_SIZE_KB_OFF], (uint16_t)(v->total_sectors / 2));
+    write16(&hdr[VHDR_SIZE_KB_OFF], (uint16_t)(v->total_sectors / BD_SECTORS_PER_KB));
     write16(&hdr[VHDR_TOT_BLKS_OFF], v->total_blocks);
 
     return vol_write(v, 0, hdr);
+}
+
+static inline int block_is_allocated(const Volume *v, uint16_t block_num)
+{
+    return (v->block_alloc_map[block_num / BD_BITS_PER_BYTE] &
+            (uint8_t)(1u << (block_num % BD_BITS_PER_BYTE))) != 0;
+}
+
+static inline void block_mark_allocated(Volume *v, uint16_t block_num)
+{
+    v->block_alloc_map[block_num / BD_BITS_PER_BYTE] |=
+        (uint8_t)(1u << (block_num % BD_BITS_PER_BYTE));
+}
+
+static inline void block_mark_free(Volume *v, uint16_t block_num)
+{
+    v->block_alloc_map[block_num / BD_BITS_PER_BYTE] &=
+        (uint8_t)~(1u << (block_num % BD_BITS_PER_BYTE));
 }
 
 static int find_free_block(Volume *v, uint16_t start)
 {
     for (uint16_t i = start; i < v->total_blocks;)
     {
-        if (v->block_alloc_map[i >> 3] == 0xFF)
+        if (v->block_alloc_map[i / BD_BITS_PER_BYTE] == BD_BITMAP_FULL)
         {
-            i = ((i >> 3) + 1) << 3;
+            i = (uint16_t)(((i / BD_BITS_PER_BYTE) + 1) * BD_BITS_PER_BYTE);
             continue;
         }
 
-        if (!(v->block_alloc_map[i >> 3] & (1 << (i & 7))))
+        if (!block_is_allocated(v, i))
             return (int)i;
 
         i++;
@@ -297,36 +321,36 @@ static int find_free_block(Volume *v, uint16_t start)
 static int alloc_block(Volume *v)
 {
     int block_num = find_free_block(v, v->alloc_next);
-    if (block_num >= 0)
+
+    if (block_num < 0)
     {
-        v->block_alloc_map[block_num >> 3] |= (1 << (block_num & 7));
-        v->alloc_next = (uint16_t)block_num + 1;
-        return block_num;
+        block_num = find_free_block(v, 0);
+
+        if (block_num < 0 || (uint16_t)block_num >= v->alloc_next)
+            return -1;
     }
 
-    block_num = find_free_block(v, 0);
-    if (block_num >= 0 && (uint16_t)block_num < v->alloc_next)
-    {
-        v->block_alloc_map[block_num >> 3] |= (1 << (block_num & 7));
-        v->alloc_next = (uint16_t)block_num + 1;
-        return block_num;
-    }
-
-    return -1;
+    block_mark_allocated(v, (uint16_t)block_num);
+    v->alloc_next = (uint16_t)block_num + 1;
+    return block_num;
 }
 
 static void free_block(Volume *v, uint16_t block_num)
 {
     if (block_num < v->total_blocks)
-        v->block_alloc_map[block_num >> 3] &= ~(1 << (block_num & 7));
+        block_mark_free(v, block_num);
 }
 
 static uint16_t count_free(Volume *v)
 {
     uint16_t c = 0;
+
     for (uint16_t i = 0; i < v->total_blocks; i++)
-        if (!(v->block_alloc_map[i >> 3] & (1 << (i & 7))))
+    {
+        if (!block_is_allocated(v, i))
             c++;
+    }
+
     return c;
 }
 
@@ -346,8 +370,10 @@ static uint16_t block_offset_lba(Volume *v, uint16_t block_num, uint32_t pos)
 static uint8_t *load_dir_entry(Volume *v, uint16_t idx)
 {
     uint16_t s = idx / BD_ENTRIES_PER_SEC;
+
     if (vol_read(v, v->root_start_lba + s, g_bd.sec_buf) != EOK)
         return 0;
+
     return g_bd.sec_buf + (idx % BD_ENTRIES_PER_SEC) * BD_ENTRY_SIZE;
 }
 
@@ -370,6 +396,7 @@ static int rescan_alloc_cb(Volume *v, const uint8_t *entry, uint16_t idx, void *
 
     uint16_t blocks[BD_BLOCKS_PER_EXTENT];
     entry_block_list(entry, blocks);
+
     for (int b = 0; b < BD_BLOCKS_PER_EXTENT; b++)
     {
         if (!blocks[b])
@@ -380,39 +407,35 @@ static int rescan_alloc_cb(Volume *v, const uint8_t *entry, uint16_t idx, void *
          * means the directory is corrupt; mounting it would let the
          * allocator hand those blocks to new files and destroy data.
          */
+
         if (blocks[b] >= v->total_blocks)
             return EBADFS;
 
-        uint8_t bit = (uint8_t)(1 << (blocks[b] & 7));
-        if (v->block_alloc_map[blocks[b] >> 3] & bit)
+        if (block_is_allocated(v, blocks[b]))
             return EBADFS;
 
-        v->block_alloc_map[blocks[b] >> 3] |= bit;
+        block_mark_allocated(v, blocks[b]);
     }
-    return 0;
+
+    return EOK;
 }
 
 static int bd_rescan_alloc_map(Volume *v)
 {
     memset(v->block_alloc_map, 0, sizeof(v->block_alloc_map));
-    v->block_alloc_map[0] |= 1;
+    block_mark_allocated(v, BD_RESERVED_BLOCK);
+
     int rc = dir_scan(v, BD_USER_INVALID, rescan_alloc_cb, 0);
     return (rc == ENOENT) ? EOK : rc;
-}
-
-static int bd_alloc_map_get(Volume *v, uint16_t block_num)
-{
-    if (block_num >= BD_VOL_MAX_BLOCKS)
-        return 1;
-
-    return (v->block_alloc_map[block_num >> 3] >> (block_num & 7)) & 1;
 }
 
 static int fcb_alloc(void)
 {
     for (int i = 0; i < BD_MAX_FCBS; i++)
+    {
         if (!g_bd.fcb[i].in_use)
             return i;
+    }
 
     return -1;
 }
@@ -437,8 +460,10 @@ static void fcb_init(FCB *f, FsContext ctx, uint32_t sz, uint8_t w, uint16_t di)
 static int bd_vol_has_writable_fcb(int8_t vol_id)
 {
     for (int i = 0; i < BD_MAX_FCBS; i++)
+    {
         if (g_bd.fcb[i].in_use && g_bd.fcb[i].writable && g_bd.fcb[i].ctx.vol_id == vol_id)
             return 1;
+    }
 
     return 0;
 }
@@ -457,10 +482,12 @@ static int dir_scan(Volume *v, uint8_t user, dir_scan_fn fn, void *ctx)
         for (uint16_t e = 0; e < BD_ENTRIES_PER_SEC; e++)
         {
             uint16_t i = s * BD_ENTRIES_PER_SEC + e;
+
             if (i >= BD_ROOT_ENTRIES)
                 return ENOENT;
 
             uint8_t *entry = g_bd.sec_buf + e * BD_ENTRY_SIZE;
+
             if (entry[0] == BD_ENTRY_EMPTY)
                 return ENOENT;
 
@@ -471,10 +498,12 @@ static int dir_scan(Volume *v, uint8_t user, dir_scan_fn fn, void *ctx)
                 continue;
 
             int rc = fn(v, entry, i, ctx);
-            if (rc != 0)
+
+            if (rc != EOK)
                 return rc;
         }
     }
+
     return ENOENT;
 }
 
@@ -486,14 +515,14 @@ static int find_extent_cb(Volume *v, const uint8_t *entry, uint16_t idx, void *a
     FindExtentCtx *ctx = arg;
 
     if (entry[BD_DIR_EXTENT_IDX] != ctx->extent_idx || !name83_match(entry, ctx->key.name83))
-        return 0;
+        return EOK;
 
     ctx->out->diridx = idx;
     entry_block_list(entry, ctx->out->blocks);
-
     ctx->out->extent_bytes = read16(&entry[BD_DIR_EXTENT_BYTES]);
     ctx->out->attrib = entry[BD_DIR_ATTR];
-    return 1;
+
+    return DIR_SCAN_STOP;
 }
 
 static int find_extent(FileKey key, uint8_t extent_idx, int16_t hint_diridx, DirInfo *out)
@@ -504,6 +533,7 @@ static int find_extent(FileKey key, uint8_t extent_idx, int16_t hint_diridx, Dir
     if (hint_diridx >= 0 && (uint16_t)hint_diridx < BD_ROOT_ENTRIES)
     {
         uint8_t *entry = load_dir_entry(v, (uint16_t)hint_diridx);
+
         if (entry && entry[0] != BD_ENTRY_EMPTY && entry[0] != BD_ENTRY_DELETED &&
             entry[BD_DIR_USER] == user && name83_match(entry, key.name83) &&
             entry[BD_DIR_EXTENT_IDX] == extent_idx)
@@ -518,13 +548,16 @@ static int find_extent(FileKey key, uint8_t extent_idx, int16_t hint_diridx, Dir
     }
 
     FindExtentCtx ctx = {key, extent_idx, out};
+
     int rc = dir_scan(v, user, find_extent_cb, &ctx);
-    return (rc == 1) ? EOK : rc;
+
+    return (rc == DIR_SCAN_STOP) ? EOK : rc;
 }
 
 static int update_extent(Volume *v, const DirInfo *de)
 {
     uint8_t *entry = load_dir_entry(v, de->diridx);
+
     if (!entry)
         return EIO;
 
@@ -536,7 +569,8 @@ static int update_extent(Volume *v, const DirInfo *de)
     return vol_write(v, v->root_start_lba + de->diridx / BD_ENTRIES_PER_SEC, g_bd.sec_buf);
 }
 
-static void fill_dir_entry(uint8_t *entry, const FileKey *key, const DirInfo *de, uint16_t first_block)
+static void fill_dir_entry(uint8_t *entry, const FileKey *key, const DirInfo *de,
+                           uint16_t first_block)
 {
     memset(entry, 0, BD_ENTRY_SIZE);
     memcpy(entry, key->name83, NAME83_LEN);
@@ -547,8 +581,7 @@ static void fill_dir_entry(uint8_t *entry, const FileKey *key, const DirInfo *de
     write16(&entry[BD_DIR_BLOCKS], first_block);
 }
 
-static int create_extent(FileKey key, const DirInfo *de,
-                         uint16_t first_block, int16_t hint_diridx,
+static int create_extent(FileKey key, const DirInfo *de, uint16_t first_block, int16_t hint_diridx,
                          uint16_t *out_diridx)
 {
     Volume *v = key.v;
@@ -556,13 +589,16 @@ static int create_extent(FileKey key, const DirInfo *de,
     if (hint_diridx >= 0 && (uint16_t)hint_diridx < BD_ROOT_ENTRIES)
     {
         uint8_t *entry = load_dir_entry(v, (uint16_t)hint_diridx);
+
         if (entry && (entry[0] == BD_ENTRY_EMPTY || entry[0] == BD_ENTRY_DELETED))
         {
             fill_dir_entry(entry, &key, de, first_block);
+
             if (out_diridx)
                 *out_diridx = (uint16_t)hint_diridx;
 
-            return vol_write(v, v->root_start_lba + (uint16_t)hint_diridx / BD_ENTRIES_PER_SEC, g_bd.sec_buf);
+            return vol_write(v, v->root_start_lba + (uint16_t)hint_diridx / BD_ENTRIES_PER_SEC,
+                             g_bd.sec_buf);
         }
     }
 
@@ -570,16 +606,20 @@ static int create_extent(FileKey key, const DirInfo *de,
     {
         if (vol_read(v, v->root_start_lba + s, g_bd.sec_buf) != EOK)
             return EIO;
+
         for (uint16_t e = 0; e < BD_ENTRIES_PER_SEC; e++)
         {
             uint16_t i = s * BD_ENTRIES_PER_SEC + e;
+
             if (i >= BD_ROOT_ENTRIES)
                 break;
 
             uint8_t *entry = g_bd.sec_buf + e * BD_ENTRY_SIZE;
+
             if (entry[0] == BD_ENTRY_EMPTY || entry[0] == BD_ENTRY_DELETED)
             {
                 fill_dir_entry(entry, &key, de, first_block);
+
                 if (out_diridx)
                     *out_diridx = i;
 
@@ -594,14 +634,14 @@ static int create_extent(FileKey key, const DirInfo *de,
 static int scan_extents_cb(Volume *vol, const uint8_t *entry, uint16_t diridx, void *arg)
 {
     (void)vol;
-    (void)diridx;
+
     ScanExtentsCtx *ctx = arg;
 
     if (!name83_match(entry, ctx->key.name83))
-        return 0;
+        return EOK;
 
     if (ctx->n >= BD_MAX_EXTENTS)
-        return ENOENT;
+        return EBADFS;
 
     uint16_t extent_bytes = read16(&entry[BD_DIR_EXTENT_BYTES]);
 
@@ -611,11 +651,12 @@ static int scan_extents_cb(Volume *vol, const uint8_t *entry, uint16_t diridx, v
     ctx->size += extent_bytes;
     ctx->alloc += (uint32_t)BD_BLOCK_BYTES * ((extent_bytes + BD_BLOCK_BYTES - 1) / BD_BLOCK_BYTES);
     ctx->n++;
-    return 0;
+
+    return EOK;
 }
 
-static int scan_extents(FileKey key, uint16_t *first_diridx, int *count,
-                        uint32_t *out_size, uint32_t *out_alloc)
+static int scan_extents(FileKey key, uint16_t *first_diridx, int *count, uint32_t *out_size,
+                        uint32_t *out_alloc)
 {
     ScanExtentsCtx ctx = {
         .key = key,
@@ -623,6 +664,7 @@ static int scan_extents(FileKey key, uint16_t *first_diridx, int *count,
     };
 
     int rc = dir_scan(key.v, key.user, scan_extents_cb, &ctx);
+
     *count = (int)ctx.n;
 
     if (out_size)
@@ -630,42 +672,46 @@ static int scan_extents(FileKey key, uint16_t *first_diridx, int *count,
 
     if (out_alloc)
         *out_alloc = ctx.alloc;
-    return (rc == ENOENT) ? EOK : rc;
-}
 
-static uint32_t file_logical_size(FileKey key)
-{
-    int num_extents;
-    uint32_t size = 0;
-    scan_extents(key, 0, &num_extents, &size, 0);
-    return size;
+    return (rc == ENOENT) ? EOK : rc;
 }
 
 static int resolve_extent(FCB *f, Volume *v)
 {
-    int block_idx = f->position / BD_BLOCK_BYTES;
-    int extent_idx = block_idx / BD_BLOCKS_PER_EXTENT;
-    int block_off = block_idx % BD_BLOCKS_PER_EXTENT;
+    uint32_t block_idx = f->position / BD_BLOCK_BYTES;
+    uint32_t extent_idx = block_idx / BD_BLOCKS_PER_EXTENT;
+    uint32_t block_off = block_idx % BD_BLOCKS_PER_EXTENT;
 
     if (extent_idx != f->extent_idx)
     {
+        if (extent_idx > UINT8_MAX)
+            return -1;
+
         DirInfo di;
         int rc = find_extent(make_key(v, (const char *)f->name83, f->ctx.user_area),
                              (uint8_t)extent_idx, (int16_t)(f->ext0_diridx + extent_idx), &di);
+
         if (rc != EOK)
             return -1;
 
         f->extent_bytes = di.extent_bytes;
         memcpy(f->blocks, di.blocks, sizeof(di.blocks));
         f->extent_idx = (uint8_t)extent_idx;
+        f->cur_diridx = (uint8_t)di.diridx;
     }
-    return block_off;
+
+    return (int)block_off;
 }
 
 static int fcb_flush(FCB *f, Volume *v)
 {
-    DirInfo ude = {.diridx = f->cur_diridx, .extent_bytes = f->extent_bytes, .extent_idx = f->extent_idx, .attrib = f->attrib};
+    DirInfo ude = {.diridx = f->cur_diridx,
+                   .extent_bytes = f->extent_bytes,
+                   .extent_idx = f->extent_idx,
+                   .attrib = f->attrib};
+
     memcpy(ude.blocks, f->blocks, sizeof(ude.blocks));
+
     return update_extent(v, &ude);
 }
 
@@ -676,34 +722,41 @@ static int fcb_flush(FCB *f, Volume *v)
 int bd_bind(int8_t vol_id)
 {
     Volume *v = vol_for(vol_id);
+
     if (!v)
         return ENOVOL;
 
     if (vol_flush() != EOK)
         return EIO;
+
     for (int i = 0; i < BD_MAX_FCBS; i++)
+    {
         if (g_bd.fcb[i].ctx.vol_id == vol_id)
             g_bd.fcb[i].in_use = 0;
+    }
 
     uint8_t hdr[DISK_SECTOR_SIZE];
     v->id = vol_id;
     v->mounted = 0;
 
     uint8_t attr = VOL_ATTR_RW;
-    if (disk_vgetattr(vol_id, &attr) != EOK)
-        return ENOVOL;
+
+    int rc = disk_vgetattr(vol_id, &attr);
+
+    if (rc != EOK)
+        return rc;
 
     v->read_only = attr & VOL_ATTR_RO;
 
-    if (disk_vread(vol_id, 0, hdr))
-        return ENOVOL;
+    if (disk_vread(vol_id, 0, hdr) != EOK)
+        return EIO;
 
     if (read16(&hdr[VHDR_MAGIC_OFF]) != DISK_MAGIC)
         return EBADFS;
 
     v->root_start_lba = read16(&hdr[VHDR_ROOT_LBA_OFF]);
     v->data_start_lba = read16(&hdr[VHDR_DATA_LBA_OFF]);
-    v->total_sectors = read16(&hdr[VHDR_SIZE_KB_OFF]) * 2;
+    v->total_sectors = read16(&hdr[VHDR_SIZE_KB_OFF]) * BD_SECTORS_PER_KB;
     v->total_blocks = read16(&hdr[VHDR_TOT_BLKS_OFF]);
 
     if (!v->total_blocks || v->total_blocks > BD_VOL_MAX_BLOCKS)
@@ -715,13 +768,15 @@ int bd_bind(int8_t vol_id)
     if (v->total_sectors > (uint16_t)disk_vsectors(vol_id))
         return EBADFS;
 
-    int rc = bd_rescan_alloc_map(v);
+    rc = bd_rescan_alloc_map(v);
+
     if (rc != EOK)
         return rc;
 
     uint16_t stride = v->total_blocks / VOL_MAX;
     v->alloc_next = stride ? ((uint16_t)vol_id * stride) % v->total_blocks : 1;
-    if (v->alloc_next == 0)
+
+    if (v->alloc_next == BD_RESERVED_BLOCK)
         v->alloc_next = 1;
 
     v->mounted = 1;
@@ -736,6 +791,7 @@ int bd_bind(int8_t vol_id)
 int bd_mount(int8_t vol_id)
 {
     Volume *v = vol_for(vol_id);
+
     if (!v)
         return ENOVOL;
 
@@ -743,11 +799,12 @@ int bd_mount(int8_t vol_id)
         return EINVAL;
 
     int rc = disk_vmount(vol_id);
+
     if (rc != EOK)
         return rc;
 
     uint16_t n_secs = (uint16_t)disk_vsectors(vol_id);
-    uint16_t data_start = (uint16_t)(1 + BD_ROOT_SECS);
+    uint16_t data_start = (uint16_t)(BD_HEADER_SECS + BD_ROOT_SECS);
     uint16_t num_data = (uint16_t)((n_secs - data_start) / BD_BLOCK_SECS);
 
     if (num_data == 0 || num_data > BD_VOL_MAX_BLOCKS)
@@ -759,12 +816,12 @@ int bd_mount(int8_t vol_id)
     memset(g_bd.sec_buf, 0, DISK_SECTOR_SIZE);
     write16(g_bd.sec_buf + VHDR_MAGIC_OFF, DISK_MAGIC);
     write16(g_bd.sec_buf + VHDR_VER_OFF, VHDR_VER);
-    write16(g_bd.sec_buf + VHDR_SIZE_KB_OFF, (uint16_t)(n_secs / 2));
-    write16(g_bd.sec_buf + VHDR_ROOT_LBA_OFF, 1);
+    write16(g_bd.sec_buf + VHDR_SIZE_KB_OFF, (uint16_t)(n_secs / BD_SECTORS_PER_KB));
+    write16(g_bd.sec_buf + VHDR_ROOT_LBA_OFF, BD_HEADER_SECS);
     write16(g_bd.sec_buf + VHDR_DATA_LBA_OFF, data_start);
     write16(g_bd.sec_buf + VHDR_TOT_BLKS_OFF, num_data);
 
-    if (disk_vwrite(vol_id, 0, g_bd.sec_buf))
+    if (disk_vwrite(vol_id, 0, g_bd.sec_buf) != EOK)
     {
         disk_vunmount(vol_id);
         return EIO;
@@ -773,7 +830,8 @@ int bd_mount(int8_t vol_id)
     for (uint16_t s = 0; s < BD_ROOT_SECS; s++)
     {
         memset(g_bd.sec_buf, 0, DISK_SECTOR_SIZE);
-        if (disk_vwrite(vol_id, (uint16_t)(1 + s), g_bd.sec_buf))
+
+        if (disk_vwrite(vol_id, (uint16_t)(BD_HEADER_SECS + s), g_bd.sec_buf) != EOK)
         {
             disk_vunmount(vol_id);
             return EIO;
@@ -790,6 +848,9 @@ int bd_extend(int8_t vol_id, uint16_t n)
 {
     CHECK_VOL(v, vol_id);
 
+    if (n == 0)
+        return EOK;
+
     if (v->read_only)
         return EVOLRO;
 
@@ -803,10 +864,12 @@ int bd_extend(int8_t vol_id, uint16_t n)
         return ENOSPC;
 
     uint16_t max_extra = BD_VOL_MAX_BLOCKS - old_blocks;
+
     if (n > max_extra)
         n = max_extra;
 
     int rc = disk_vextend(vol_id, n);
+
     if (rc != EOK)
         return rc;
 
@@ -817,6 +880,7 @@ int bd_extend(int8_t vol_id, uint16_t n)
         v->total_blocks = BD_VOL_MAX_BLOCKS;
 
     rc = bd_write_header(v);
+
     if (rc != EOK)
     {
         if (disk_vshrink(vol_id, n) == EOK)
@@ -825,6 +889,7 @@ int bd_extend(int8_t vol_id, uint16_t n)
             v->total_blocks = old_blocks;
             bd_write_header(v);
         }
+
         return EIO;
     }
 
@@ -839,22 +904,26 @@ int bd_shrink(int8_t vol_id, uint16_t n)
 {
     CHECK_VOL(v, vol_id);
 
+    if (n == 0)
+        return EOK;
+
     if (v->read_only)
         return EVOLRO;
 
+    if (n >= v->total_blocks)
+        return EINVAL;
+
     uint32_t removed = n;
-    uint32_t new_total_secs = (uint32_t)v->total_sectors - (uint32_t)n * BD_BLOCK_SECS;
+    uint32_t new_total_secs = (uint32_t)v->total_sectors - removed * BD_BLOCK_SECS;
 
     if (new_total_secs < BD_MIN_VOL_SECS)
         return EINVAL;
 
-    if (removed >= v->total_blocks)
-        return EINVAL;
-
     uint32_t new_total_blocks = v->total_blocks - removed;
+
     for (uint32_t b = new_total_blocks; b < v->total_blocks; b++)
     {
-        if (bd_alloc_map_get(v, (uint16_t)b))
+        if (block_is_allocated(v, (uint16_t)b))
             return EPERM;
     }
 
@@ -865,6 +934,7 @@ int bd_shrink(int8_t vol_id, uint16_t n)
     uint16_t old_blocks = v->total_blocks;
 
     int rc = disk_vshrink(vol_id, n);
+
     if (rc != EOK)
         return rc;
 
@@ -872,15 +942,18 @@ int bd_shrink(int8_t vol_id, uint16_t n)
     v->total_blocks = (uint16_t)new_total_blocks;
 
     rc = bd_write_header(v);
+
     if (rc != EOK)
     {
         /* Undo the shrink so VMAP, header and RAM geometry agree. */
+
         if (disk_vextend(vol_id, n) == EOK)
         {
             v->total_sectors = old_secs;
             v->total_blocks = old_blocks;
             bd_write_header(v);
         }
+
         return EIO;
     }
 
@@ -894,6 +967,7 @@ int bd_shrink(int8_t vol_id, uint16_t n)
 int bd_unbind(int8_t vol_id)
 {
     Volume *v = vol_for(vol_id);
+
     if (!v)
         return ENOVOL;
 
@@ -904,20 +978,31 @@ int bd_unbind(int8_t vol_id)
         return EIO;
 
     for (int i = 0; i < BD_MAX_FCBS; i++)
+    {
         if (g_bd.fcb[i].ctx.vol_id == vol_id)
             g_bd.fcb[i].in_use = 0;
+    }
 
     int rrc = bd_rescan_alloc_map(v);
+
     if (rrc != EOK)
         return rrc;
-    uint16_t map_bytes = (v->total_blocks + 7) / 8;
-    if (v->block_alloc_map[0] & 0xFE)
+
+    uint16_t map_bytes = (uint16_t)((v->total_blocks + BD_BITS_PER_BYTE - 1) / BD_BITS_PER_BYTE);
+
+    uint8_t reserved_bit = (uint8_t)(1u << (BD_RESERVED_BLOCK % BD_BITS_PER_BYTE));
+
+    if (v->block_alloc_map[BD_RESERVED_BLOCK / BD_BITS_PER_BYTE] & (uint8_t)~reserved_bit)
         return EPERM;
+
     for (uint16_t i = 1; i < map_bytes; i++)
+    {
         if (v->block_alloc_map[i])
             return EPERM;
+    }
 
     int rc = disk_vunmount(vol_id);
+
     if (rc != EOK)
         return rc;
 
@@ -933,17 +1018,21 @@ int bd_unbind(int8_t vol_id)
 int bd_sync(void)
 {
     int rc = vol_flush();
+
     if (rc != EOK)
         return rc;
 
     for (int v = 0; v < VOL_MAX; v++)
     {
         Volume *vol = &g_bd.vol[v];
+
         if (!vol->mounted || bd_vol_has_writable_fcb(v))
             continue;
 
-        if (bd_rescan_alloc_map(vol) != EOK)
-            continue;
+        rc = bd_rescan_alloc_map(vol);
+
+        if (rc != EOK)
+            return rc;
 
         int block_num = find_free_block(vol, 1);
         vol->alloc_next = (block_num >= 0) ? (uint16_t)block_num : vol->total_blocks;
@@ -957,9 +1046,11 @@ int bd_vstat(int8_t vol_id, VolStat *stat)
     CHECK_VOL(v, vol_id);
 
     uint16_t usable = v->total_blocks > 0 ? (uint16_t)(v->total_blocks - 1) : 0;
+
     stat->total_blocks = usable;
     stat->free_blocks = count_free(v);
     stat->read_only = v->read_only;
+
     return EOK;
 }
 
@@ -967,10 +1058,11 @@ int bd_vsetattr(int8_t vol_id, uint8_t attr)
 {
     CHECK_VOL(v, vol_id);
 
-    if (attr & ~VOL_ATTR_RO)
-        return ENOVOL;
+    if (attr & (uint8_t)~VOL_ATTR_RO)
+        return EINVAL;
 
     int rc = disk_vsetattr(vol_id, attr & VOL_ATTR_RO);
+
     if (rc != EOK)
         return rc;
 
@@ -986,10 +1078,12 @@ int bd_vsetattr(int8_t vol_id, uint8_t attr)
 int bd_open(const char *name83, FsContext ctx, uint8_t writable)
 {
     CHECK_VOL(v, ctx.vol_id);
+
     if (writable && v->read_only)
         return EVOLRO;
 
     int fd = fcb_alloc();
+
     if (fd < 0)
         return ENFILE;
 
@@ -997,6 +1091,7 @@ int bd_open(const char *name83, FsContext ctx, uint8_t writable)
 
     DirInfo di;
     int rc = find_extent(make_key(v, name83, ctx.user_area), 0, -1, &di);
+
     if (rc != EOK)
     {
         f->in_use = 0;
@@ -1010,17 +1105,27 @@ int bd_open(const char *name83, FsContext ctx, uint8_t writable)
     }
 
     uint8_t *rep = load_dir_entry(v, di.diridx);
+
     if (rep)
         memcpy(f->name83, rep, NAME83_LEN);
     else
         memcpy(f->name83, name83, NAME83_LEN);
 
-    uint32_t total = file_logical_size(make_key(v, name83, ctx.user_area));
+    uint32_t total;
+    int num_extents;
+
+    rc = scan_extents(make_key(v, name83, ctx.user_area), 0, &num_extents, &total, 0);
+
+    if (rc != EOK)
+    {
+        f->in_use = 0;
+        return rc;
+    }
+
     fcb_init(f, ctx, total, writable, di.diridx);
 
     f->attrib = di.attrib;
     memcpy(f->blocks, di.blocks, sizeof(di.blocks));
-
     f->extent_bytes = di.extent_bytes;
     f->extent_idx = 0;
 
@@ -1034,17 +1139,22 @@ int bd_open(const char *name83, FsContext ctx, uint8_t writable)
 int bd_read(int fd, uint8_t *buf, uint16_t len)
 {
     CHECK_FCB(f, v, fd);
-    uint32_t rem = f->size - f->position, br = 0;
+
+    uint32_t rem = f->size - f->position;
+    uint32_t br = 0;
+
     if (len > rem)
-        len = rem;
+        len = (uint16_t)rem;
 
     while (br < len)
     {
         int block_off = resolve_extent(f, v);
+
         if (block_off < 0 || block_off >= BD_BLOCKS_PER_EXTENT)
             break;
 
         uint16_t lba = block_offset_lba(v, f->blocks[block_off], f->position);
+
         uint16_t off = f->position % DISK_SECTOR_SIZE;
         uint32_t sl = DISK_SECTOR_SIZE - off;
         uint32_t remain = len - br;
@@ -1053,7 +1163,9 @@ int bd_read(int fd, uint8_t *buf, uint16_t len)
             return br ? (int)br : EIO;
 
         uint32_t tc = (remain > sl) ? sl : remain;
+
         memcpy(buf + br, &g_bd.sec_buf[off], tc);
+
         br += tc;
         f->position += tc;
     }
@@ -1068,14 +1180,16 @@ int bd_read(int fd, uint8_t *buf, uint16_t len)
 int bd_write(int fd, const uint8_t *buf, uint16_t len)
 {
     CHECK_FCB(f, v, fd);
+
     if (!f->writable)
         return EFILERO;
 
     uint16_t bw = 0;
+
     while (bw < len)
     {
-        int block_idx = f->position / BD_BLOCK_BYTES;
-        int extent_idx = block_idx / BD_BLOCKS_PER_EXTENT;
+        uint32_t block_idx = f->position / BD_BLOCK_BYTES;
+        uint32_t extent_idx = block_idx / BD_BLOCKS_PER_EXTENT;
 
         if (extent_idx != f->extent_idx)
         {
@@ -1083,16 +1197,19 @@ int bd_write(int fd, const uint8_t *buf, uint16_t len)
                 return bw ? (int)bw : ENOSPC;
 
             int flrc = fcb_flush(f, v);
+
             if (flrc != EOK)
                 return bw ? (int)bw : flrc;
 
             DirInfo fdi;
-            int find_rc = find_extent(make_key(v, (const char *)f->name83, f->ctx.user_area), (uint8_t)extent_idx,
-                                      (int16_t)(f->ext0_diridx + extent_idx), &fdi);
+
+            int find_rc =
+                find_extent(make_key(v, (const char *)f->name83, f->ctx.user_area),
+                            (uint8_t)extent_idx, (int16_t)(f->ext0_diridx + extent_idx), &fdi);
 
             if (find_rc == EOK)
             {
-                f->cur_diridx = fdi.diridx;
+                f->cur_diridx = (uint8_t)fdi.diridx;
                 memcpy(f->blocks, fdi.blocks, sizeof(fdi.blocks));
                 f->extent_bytes = fdi.extent_bytes;
                 f->extent_idx = (uint8_t)extent_idx;
@@ -1100,20 +1217,25 @@ int bd_write(int fd, const uint8_t *buf, uint16_t len)
             else if (find_rc == ENOENT)
             {
                 int new_block = alloc_block(v);
+
                 if (new_block < 0)
                     return bw ? (int)bw : ENOSPC;
 
                 DirInfo nde = {.extent_idx = (uint8_t)extent_idx, .attrib = f->attrib};
+
                 uint16_t ndi;
-                int rc = create_extent(make_key(v, (const char *)f->name83, f->ctx.user_area),
-                                       &nde, (uint16_t)new_block,
-                                       (int16_t)(f->ext0_diridx + extent_idx), &ndi);
+
+                int rc = create_extent(make_key(v, (const char *)f->name83, f->ctx.user_area), &nde,
+                                       (uint16_t)new_block, (int16_t)(f->ext0_diridx + extent_idx),
+                                       &ndi);
+
                 if (rc != EOK)
                 {
                     free_block(v, (uint16_t)new_block);
                     return bw ? (int)bw : rc;
                 }
-                f->cur_diridx = ndi;
+
+                f->cur_diridx = (uint8_t)ndi;
 
                 memset(f->blocks, 0, sizeof(f->blocks));
                 f->blocks[0] = (uint16_t)new_block;
@@ -1126,42 +1248,49 @@ int bd_write(int fd, const uint8_t *buf, uint16_t len)
             }
         }
 
-        int block_off = block_idx % BD_BLOCKS_PER_EXTENT;
+        int block_off = (int)(block_idx % BD_BLOCKS_PER_EXTENT);
+
+        int new_block = 0;
 
         if (f->blocks[block_off] == 0)
         {
             int block_num = alloc_block(v);
+
             if (block_num < 0)
                 return bw ? (int)bw : ENOSPC;
+
             f->blocks[block_off] = (uint16_t)block_num;
             memset(g_bd.sec_buf, 0, DISK_SECTOR_SIZE);
+            new_block = 1;
         }
 
         uint16_t lba = block_offset_lba(v, f->blocks[block_off], f->position);
-        uint16_t off = f->position % DISK_SECTOR_SIZE;
 
-        if (off > 0 || bw + DISK_SECTOR_SIZE - off > len)
+        uint16_t off = f->position % DISK_SECTOR_SIZE;
+        uint32_t sl = DISK_SECTOR_SIZE - off;
+        uint32_t remain = (uint32_t)(len - bw);
+        uint32_t tc = (remain > sl) ? sl : remain;
+
+        if (!new_block && (off > 0 || tc < sl))
         {
             if (vol_read(v, lba, g_bd.sec_buf) != EOK)
                 return bw ? (int)bw : EIO;
         }
-
-        uint32_t sl = DISK_SECTOR_SIZE - off;
-        uint32_t remain = (uint32_t)(len - bw);
-        uint32_t tc = (remain > sl) ? sl : remain;
 
         memcpy(&g_bd.sec_buf[off], buf + bw, tc);
 
         if (vol_write(v, lba, g_bd.sec_buf) != EOK)
             return bw ? (int)bw : EIO;
 
-        bw += tc;
+        bw += (uint16_t)tc;
         f->position += tc;
 
         uint32_t extent_max = BD_EXTENT_BYTES;
         uint32_t new_extent_size = f->position % extent_max;
+
         if (new_extent_size == 0 && f->position >= extent_max)
             new_extent_size = extent_max;
+
         if (new_extent_size > f->extent_bytes)
             f->extent_bytes = (uint16_t)new_extent_size;
 
@@ -1176,15 +1305,24 @@ int bd_write(int fd, const uint8_t *buf, uint16_t len)
 int bd_close(int fd)
 {
     FCB *f = fcb_get(fd);
+
     if (!f)
         return EBADF;
+
     Volume *v = vol_for(f->ctx.vol_id);
     int rc = EOK;
-    if (f->writable && v && v->mounted)
+
+    if (f->writable)
     {
-        rc = fcb_flush(f, v);
-        if (rc == EOK)
-            rc = vol_flush();
+        if (!v || !v->mounted)
+            rc = ENOVOL;
+        else
+        {
+            rc = fcb_flush(f, v);
+
+            if (rc == EOK)
+                rc = vol_flush();
+        }
     }
 
     memset(f, 0, sizeof(FCB));
@@ -1195,6 +1333,7 @@ int bd_close(int fd)
 int bd_seek(int fd, uint32_t offset)
 {
     CHECK_FCB(f, v, fd);
+
     if (offset > f->size)
         offset = f->size;
 
@@ -1217,8 +1356,10 @@ int bd_find(const char *pat, FsContext ctx, FileInfo *out, uint16_t start_pos)
      * raw — '?' matches any byte, blanks only blanks — so an ambiguous
      * reference never crosses the '.' boundary. */
     char base_pat[NAME83_BASE + 1], ext_pat[NAME83_EXT + 1];
+
     memcpy(base_pat, pat, NAME83_BASE);
     base_pat[NAME83_BASE] = '\0';
+
     memcpy(ext_pat, pat + NAME83_BASE, NAME83_EXT);
     ext_pat[NAME83_EXT] = '\0';
 
@@ -1230,13 +1371,16 @@ int bd_find(const char *pat, FsContext ctx, FileInfo *out, uint16_t start_pos)
             return EIO;
 
         uint16_t first_e = (s == start_s) ? (start_pos % BD_ENTRIES_PER_SEC) : 0;
+
         for (uint16_t e = first_e; e < BD_ENTRIES_PER_SEC; e++)
         {
             uint16_t i = s * BD_ENTRIES_PER_SEC + e;
+
             if (i >= BD_ROOT_ENTRIES)
                 return ENOENT;
 
             uint8_t *entry = g_bd.sec_buf + e * BD_ENTRY_SIZE;
+
             if (entry[0] == BD_ENTRY_EMPTY)
                 return ENOENT;
 
@@ -1247,12 +1391,14 @@ int bd_find(const char *pat, FsContext ctx, FileInfo *out, uint16_t start_pos)
                 continue;
 
             char name[FILENAME_MAX];
+
             entry_to_name(entry, name);
 
-            /* Per-field FCB matching: the pattern never crosses the '.'
-             * boundary, and a blank extension matches only blank ones. */
-            char cand_base[NAME83_BASE + 1], cand_ext[NAME83_EXT + 1];
+            char cand_base[NAME83_BASE + 1];
+            char cand_ext[NAME83_EXT + 1];
+
             entry_fields(entry, cand_base, cand_ext);
+
             if (!wildmatch(base_pat, cand_base) || !wildmatch(ext_pat, cand_ext))
                 continue;
 
@@ -1260,9 +1406,15 @@ int bd_find(const char *pat, FsContext ctx, FileInfo *out, uint16_t start_pos)
             memcpy(match_buf, entry, BD_ENTRY_SIZE);
 
             int file_extents = 0;
-            uint32_t size = 0, alloc_bytes = 0;
+            uint32_t size = 0;
+            uint32_t alloc_bytes = 0;
+
             FileKey key = make_key(v, (const char *)match_buf, ctx.user_area);
-            scan_extents(key, 0, &file_extents, &size, &alloc_bytes);
+
+            int rc = scan_extents(key, 0, &file_extents, &size, &alloc_bytes);
+
+            if (rc != EOK)
+                return rc;
 
             out->size = size;
             out->alloc_bytes = alloc_bytes;
@@ -1274,6 +1426,7 @@ int bd_find(const char *pat, FsContext ctx, FileInfo *out, uint16_t start_pos)
             return i + 1;
         }
     }
+
     return ENOENT;
 }
 
@@ -1284,10 +1437,12 @@ int bd_find(const char *pat, FsContext ctx, FileInfo *out, uint16_t start_pos)
 int bd_create(const char *n83, FsContext ctx)
 {
     CHECK_VOL(v, ctx.vol_id);
+
     if (v->read_only)
         return EVOLRO;
 
     int fd = fcb_alloc();
+
     if (fd < 0)
         return ENFILE;
 
@@ -1301,19 +1456,24 @@ int bd_create(const char *n83, FsContext ctx)
             f->in_use = 0;
             return EIO;
         }
+
         for (uint16_t e = 0; e < BD_ENTRIES_PER_SEC; e++)
         {
             uint16_t i = s * BD_ENTRIES_PER_SEC + e;
+
             if (i >= BD_ROOT_ENTRIES)
                 goto create_done;
 
             uint8_t *entry = g_bd.sec_buf + e * BD_ENTRY_SIZE;
+
             if (entry[0] == BD_ENTRY_EMPTY || entry[0] == BD_ENTRY_DELETED)
             {
                 if (fidx == -1)
                     fidx = i;
+
                 continue;
             }
+
             if (entry[BD_DIR_USER] == ctx.user_area && name83_match(entry, n83))
             {
                 f->in_use = 0;
@@ -1321,6 +1481,7 @@ int bd_create(const char *n83, FsContext ctx)
             }
         }
     }
+
 create_done:
 
     if (fidx == -1)
@@ -1330,6 +1491,7 @@ create_done:
     }
 
     uint8_t *entry = load_dir_entry(v, (uint16_t)fidx);
+
     if (!entry)
     {
         f->in_use = 0;
@@ -1348,7 +1510,9 @@ create_done:
     }
 
     memcpy(f->name83, n83, NAME83_LEN);
-    fcb_init(f, ctx, 0, 1, fidx);
+
+    fcb_init(f, ctx, 0, 1, (uint16_t)fidx);
+
     f->attrib = 0;
     memset(f->blocks, 0, sizeof(f->blocks));
 
@@ -1361,24 +1525,27 @@ create_done:
 int bd_delete(const char *name83, FsContext ctx)
 {
     CHECK_VOL(v, ctx.vol_id);
+
     if (v->read_only)
         return EVOLRO;
 
     FileKey key = make_key(v, name83, ctx.user_area);
 
     DirInfo di;
+
     if (find_extent(key, 0, -1, &di) != EOK)
         return ENOENT;
 
     if (di.attrib & FILE_ATTR_READ_ONLY)
         return EPERM;
 
-    for (uint8_t ei = 0;; ei++)
+    for (uint16_t ei = 0; ei <= UINT8_MAX; ei++)
     {
-        if (find_extent(key, ei, -1, &di) != EOK)
+        if (find_extent(key, (uint8_t)ei, -1, &di) != EOK)
             break;
 
         uint8_t *entry = load_dir_entry(v, di.diridx);
+
         if (!entry)
             return EIO;
 
@@ -1392,14 +1559,18 @@ int bd_delete(const char *name83, FsContext ctx)
          * out for reuse.
          */
         entry[0] = BD_ENTRY_DELETED;
+
         if (vol_write(v, v->root_start_lba + di.diridx / BD_ENTRIES_PER_SEC, g_bd.sec_buf) != EOK)
             return EIO;
+
         if (vol_flush() != EOK)
             return EIO;
 
         for (int b = 0; b < BD_BLOCKS_PER_EXTENT; b++)
+        {
             if (blocks[b])
                 free_block(v, blocks[b]);
+        }
     }
 
     return EOK;
@@ -1412,11 +1583,17 @@ int bd_delete(const char *name83, FsContext ctx)
 int bd_rename(const char *old83, const char *new83, FsContext ctx)
 {
     CHECK_VOL(v, ctx.vol_id);
+
     if (v->read_only)
         return EVOLRO;
 
     int num_extents;
-    scan_extents(make_key(v, new83, ctx.user_area), 0, &num_extents, 0, 0);
+
+    int rc = scan_extents(make_key(v, new83, ctx.user_area), 0, &num_extents, 0, 0);
+
+    if (rc != EOK)
+        return rc;
+
     if (num_extents > 0)
         return EEXIST;
 
@@ -1426,25 +1603,31 @@ int bd_rename(const char *old83, const char *new83, FsContext ctx)
     {
         int dirty = 0;
         int stop = 0;
+
         if (vol_read(v, v->root_start_lba + s, g_bd.sec_buf) != EOK)
             return EIO;
 
         for (uint16_t e = 0; e < BD_ENTRIES_PER_SEC; e++)
         {
             uint16_t i = s * BD_ENTRIES_PER_SEC + e;
+
             if (i >= BD_ROOT_ENTRIES)
             {
                 stop = 1;
                 break;
             }
+
             uint8_t *entry = g_bd.sec_buf + e * BD_ENTRY_SIZE;
+
             if (entry[0] == BD_ENTRY_EMPTY)
             {
                 stop = 1;
                 break;
             }
+
             if (entry[0] == BD_ENTRY_DELETED || entry[BD_DIR_USER] != ctx.user_area)
                 continue;
+
             if (!name83_match(entry, old83))
                 continue;
 
@@ -1466,6 +1649,7 @@ int bd_rename(const char *old83, const char *new83, FsContext ctx)
 uint32_t bd_size(int fd)
 {
     FCB *f = fcb_get(fd);
+
     return f ? f->size : 0;
 }
 
@@ -1479,21 +1663,27 @@ int bd_fsetattr(const char *name83, FsContext ctx, uint8_t attrib)
 
     /* extent_idx is a uint8_t on disk, so at most 256 extents exist. */
     int rc = ENOENT;
+
     for (uint16_t ei = 0; ei <= UINT8_MAX; ei++)
     {
         DirInfo di;
-        int frc = find_extent(make_key(v, name83, ctx.user_area), ei, -1, &di);
+
+        int frc = find_extent(make_key(v, name83, ctx.user_area), (uint8_t)ei, -1, &di);
+
         if (frc == ENOENT)
             break;
+
         if (frc != EOK)
             return frc;
 
         uint8_t *entry = load_dir_entry(v, di.diridx);
+
         if (!entry)
             return EIO;
+
         entry[BD_DIR_ATTR] = attrib;
-        if (vol_write(v, v->root_start_lba + di.diridx / BD_ENTRIES_PER_SEC,
-                      g_bd.sec_buf) != EOK)
+
+        if (vol_write(v, v->root_start_lba + di.diridx / BD_ENTRIES_PER_SEC, g_bd.sec_buf) != EOK)
             return EIO;
 
         rc = EOK;

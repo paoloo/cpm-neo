@@ -20,9 +20,9 @@ static int dma_transfer(uint16_t dst, uint16_t src, uint32_t count, uint8_t flag
                    : (width == DMA_FLAG_WIDTH_32) ? DMA_CSTR_WIDTH_32
                                                   : DMA_CSTR_WIDTH_8;
 
-    uint8_t cfg = step | (flags & DMA_FLAG_SRC_INC ? DMA_CSTR_SRC_INC : 0)
-                       | (flags & DMA_FLAG_DST_INC ? DMA_CSTR_DST_INC : 0)
-                       | (flags & DMA_FLAG_STREAM ? DMA_CSTR_STREAM : 0);
+    uint8_t cfg = step | (flags & DMA_FLAG_SRC_INC ? DMA_CSTR_SRC_INC : 0) |
+                  (flags & DMA_FLAG_DST_INC ? DMA_CSTR_DST_INC : 0) |
+                  (flags & DMA_FLAG_STREAM ? DMA_CSTR_STREAM : 0);
 
     MMIO_W16(DMA_SAR, src);
     MMIO_W16(DMA_DAR, dst);
@@ -46,8 +46,11 @@ int bios_init(void)
 uint32_t bios_time(void)
 {
     uint16_t now = MMIO_R16(TIMER_CNTR);
+
     g_time_acc += (uint16_t)(now - g_time_prev);
+
     g_time_prev = now;
+
     uint16_t khz = MMIO_R16(CLK_KHZ);
 
     if (khz == 0)
@@ -61,7 +64,7 @@ void bios_conout(int c)
     MMIO_W8(DSP_DATA, c);
 }
 
-int bios_const(void)
+int bios_constat(void)
 {
     return MMIO_R32(KBD_STAT) ? 0xFF : 0;
 }
@@ -69,6 +72,7 @@ int bios_const(void)
 int bios_conin(void)
 {
     int c;
+
     while ((c = MMIO_R32(KBD_DATA)) == 0)
         ;
     return c;
@@ -80,7 +84,8 @@ int bios_read(uint16_t lba, uint8_t *buf)
         return -1;
 
     MMIO_W16(DISK_SECTOR, lba | DISK_CFG_READ);
-    return dma_transfer((uint16_t)(uintptr_t)buf, (uint16_t)DISK_BUFFER, DISK_SECTOR_SIZE, DMA_DISK_RD);
+    return dma_transfer((uint16_t)(uintptr_t)buf, (uint16_t)DISK_BUFFER, DISK_SECTOR_SIZE,
+                        DMA_DISK_RD);
 }
 
 void bios_consize(uint8_t *cw, uint8_t *ch)
@@ -91,7 +96,9 @@ void bios_consize(uint8_t *cw, uint8_t *ch)
 
 int bios_write(uint16_t lba, const uint8_t *buf)
 {
-    int rc = dma_transfer((uint16_t)DISK_BUFFER, (uint16_t)(uintptr_t)buf, DISK_SECTOR_SIZE, DMA_DISK_WR);
+    int rc = dma_transfer((uint16_t)DISK_BUFFER, (uint16_t)(uintptr_t)buf, DISK_SECTOR_SIZE,
+                          DMA_DISK_WR);
+
     if (rc != 0)
         return rc;
 

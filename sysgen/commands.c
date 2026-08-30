@@ -1,15 +1,15 @@
 #include "commands.h"
-#include "utils.h"
-#include "kernel_abi.h"
 #include "bdos.h"
 #include "disk.h"
+#include "kernel_abi.h"
 #include "sysgen.h"
+#include "utils.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <stdbool.h>
 
 #define OS_VER 0x0100
 #define KERN_VER 0x0100
@@ -43,13 +43,13 @@ typedef struct
     const char *verb;
 } AddFileOpts;
 
-/* Output paths for a compiled .COM file and the architecture string. */
+/* Output paths for a compiled .COM file and the platform string. */
 typedef struct
 {
     char *out_com;
     size_t out_n;
-    char *arch;
-    size_t arch_n;
+    char *platform;
+    size_t platform_n;
 } BuildFolderOpts;
 
 /* Walk-state for recursively installing bundled apps. */
@@ -73,9 +73,7 @@ typedef struct
 typedef struct
 {
     long disk_size_kb;
-    long mem_bytes;
     const char *platform;
-    const char *arch;
     bool no_extra;
 } CmdNewConfig;
 
@@ -92,7 +90,8 @@ typedef struct
 
 static int add_data_open(const char *file, const AddFileOpts *opts);
 static int add_file(const char *disk, const char *file, const AddFileOpts *opts);
-static int build_folder_com(const SysgenPaths *paths, const char *folder, const BuildFolderOpts *opts);
+static int build_folder_com(const SysgenPaths *paths, const char *folder,
+                            const BuildFolderOpts *opts);
 static int install_bundled_app(const char *dir, const char *name, void *ud);
 static int install_bundled_source(const char *path, const char *name, void *ud);
 static int install_sys_apps(const SysgenPaths *paths, const AddFileOpts *opts);
@@ -108,6 +107,7 @@ static const char *extract_basename(const char *path)
 
     if (slash && slash >= base)
         base = slash + 1;
+
     if (backslash && backslash >= base)
         base = backslash + 1;
 
@@ -122,6 +122,7 @@ static void n83_dot(const char *n83, char *out, size_t n)
 
     while (nb > 0 && n83[nb - 1] == ' ')
         nb--;
+
     while (ne > 0 && n83[NAME83_BASE + ne - 1] == ' ')
         ne--;
 
@@ -145,9 +146,35 @@ static uint32_t get_file_size(const char *path)
 {
     uint8_t *tmp = NULL;
     uint32_t size = 0;
+
     if (read_file(path, &tmp, &size) == 0)
         free(tmp);
     return size;
+}
+
+/* Read the OS platform id (ID) stamped by build_disk.sh into buf.  Returns
+ * 0 on success, -1 if the stamp is missing or unreadable. */
+static int read_platform_id(const SysgenPaths *paths, char *buf, size_t n)
+{
+    char path[SYSGEN_FULL_PATH_MAX];
+    snprintf(path, sizeof(path), "%s/.platform_id", paths->build_dir);
+
+    FILE *f = fopen(path, "r");
+
+    if (!f)
+        return -1;
+
+    buf[0] = '\0';
+    int rc = 0;
+
+    if (n > 1 && fgets(buf, (int)n, f) == NULL)
+        rc = -1;
+
+    fclose(f);
+
+    buf[strcspn(buf, "\r\n")] = '\0';
+
+    return rc;
 }
 
 /* ========================================================================= *
@@ -171,6 +198,7 @@ static int parse_dst(int argc, char **argv, int *vol, int *user)
         err("invalid --dst '%s' (expected Vn, e.g. A0, B7)", v);
         return 1;
     }
+
     return 0;
 }
 
@@ -210,7 +238,7 @@ static int parse_attr_dflt(int argc, char **argv, uint8_t *attr, uint8_t dflt)
             return 1;
         }
     }
-    
+
     return 0;
 }
 
@@ -219,6 +247,7 @@ static int setup_disk_target(int argc, char **argv, const char *vn_arg, ImageTar
     const char *disk = resolve_disk(argc, argv, tgt->disk_path, sizeof(tgt->disk_path));
 
     int vol = VOL_A, user = 0;
+
     if (vn_arg && parse_vn(vn_arg, &vol, &user) != 0)
     {
         err("invalid volume '%s'", vn_arg);
@@ -237,32 +266,19 @@ static int setup_disk_target(int argc, char **argv, const char *vn_arg, ImageTar
  * System Generation & Build Logic
  * ========================================================================= */
 
-static int run_build_script(const SysgenPaths *paths, const char *arch,
-                            long mem, const char *platform)
+static int run_build_script(const SysgenPaths *paths, const char *platform)
 {
     char script[SYSGEN_FULL_PATH_MAX];
     snprintf(script, sizeof(script), "%s/../build_disk.sh", paths->build_dir);
-
-    char mem_flag[32];
-    snprintf(mem_flag, sizeof(mem_flag), "--mem=%ldK", mem / 1024);
-
-    char arch_flag[64];
-    snprintf(arch_flag, sizeof(arch_flag), "--arch=%s", arch);
 
     char plat_flag[64];
     snprintf(plat_flag, sizeof(plat_flag), "--platform=%s", platform);
 
     char *argv[] = {
-        (char *)"sh",
-        script,
-        arch_flag,
-        mem_flag,
-        plat_flag,
-        NULL,
+        (char *)"sh", script, plat_flag, NULL,
     };
 
-    printf("Starting disk build for %s [Arch: %s, Mem: %ld KB]\n",
-           platform, arch, mem / 1024);
+    printf("Starting disk build for %s\n", platform);
 
     return spawn_and_wait(argv);
 }
@@ -270,17 +286,17 @@ static int run_build_script(const SysgenPaths *paths, const char *arch,
 static int disk_size_over_cap(long size_kb, uint32_t ksz, uint32_t ccpsz)
 {
     int max_kb = mkdisk_max_size_kb(ksz, ccpsz);
+
     if (size_kb <= max_kb)
         return 0;
 
-    err("--disk-size %ldK exceeds the %dK maximum useful disk size",
-        size_kb, max_kb);
+    err("--disk-size %ldK exceeds the %dK maximum useful disk size", size_kb, max_kb);
     return 1;
 }
 
 static void report_build(uint32_t size_kb, uint32_t boot_size, uint32_t kern_size,
-                         uint32_t ccp_size, uint32_t kern_load, uint32_t reserved,
-                         const char *out_disk_path)
+                         uint32_t ccp_size, uint32_t kern_load, uint32_t tpa_base,
+                         uint32_t reserved, const char *out_disk_path)
 {
     const uint8_t *vmap = sysgen_disk() + (uint32_t)VMAP_LBA * DISK_SECTOR_SIZE;
     char tmp[32];
@@ -297,17 +313,13 @@ static void report_build(uint32_t size_kb, uint32_t boot_size, uint32_t kern_siz
     printf("  Kernel size      : %u B\n", kern_size);
     printf("  CCP size         : %u B\n", ccp_size);
     printf("  Kernel base      : 0x%04X\n", kern_load);
-    /* TPA size as seen from the kernel's load address.  Platforms that map
-     * CP/M RAM at a physical base (e.g. pico2 at 0x20000000) use 32-bit
-     * load addresses, so the offset within the RAM window is what counts. */
-    uint32_t tpa_off = (kern_load - TPA_LOAD_ADDR) & 0xFFFFFFu;
-    printf("  TPA              : %lu KB\n", (unsigned long)(tpa_off / 1024));
+    printf("  TPA              : %lu KB\n", (unsigned long)((kern_load - tpa_base) / 1024));
     printf("  Reserved secs    : %u (kernel + CCP)\n", reserved);
     printf("  Kernel LBA       : %u\n", read16(sysgen_disk() + S0_KERN_LBA));
 
     printf("  Block size       : 1 KB\n");
-    printf("  Blocks           : %u @ LBA %u\n",
-           read16(vmap + VMAP_NUM_BLOCKS), read16(vmap + VMAP_BLOCK_BASE));
+    printf("  Blocks           : %u @ LBA %u\n", read16(vmap + VMAP_NUM_BLOCKS),
+           read16(vmap + VMAP_BLOCK_BASE));
 
     printf("-------------------------------------------------------------\n");
     uint16_t block_base = read16(vmap + VMAP_BLOCK_BASE);
@@ -322,9 +334,9 @@ static void report_build(uint32_t size_kb, uint32_t boot_size, uint32_t kern_siz
 
         /* Usable capacity mirrors bd_vstat: data blocks from the volume header,
          * minus the reserved sentinel block. */
-        uint16_t tot_blks = read16(sysgen_disk() +
-                                 ((uint32_t)(block_base + start * BD_BLOCK_SECS)) * DISK_SECTOR_SIZE +
-                                 VHDR_TOT_BLKS_OFF);
+        uint16_t tot_blks = read16(
+            sysgen_disk() + ((uint32_t)(block_base + start * BD_BLOCK_SECS)) * DISK_SECTOR_SIZE +
+            VHDR_TOT_BLKS_OFF);
         uint32_t usable = tot_blks > 0 ? (uint32_t)(tot_blks - 1) : 0;
         disk_usable_kb += usable;
 
@@ -352,12 +364,7 @@ static bool get_bool_flag(int argc, char **argv, const char *flag_name)
 
 /* Whitelists of flags accepted by each command (NULL-terminated). */
 static const char *const FLAGS_NEW[] = {
-    "--disk-size",
-    "--mem",
-    "--platform",
-    "--arch",
-    "--no-extra",
-    NULL,
+    "--disk-size", "--platform", "--no-extra", NULL,
 };
 static const char *const FLAGS_FILE[] = {
     "--dst",
@@ -366,12 +373,7 @@ static const char *const FLAGS_FILE[] = {
     NULL,
 };
 static const char *const FLAGS_INSTALL[] = {
-    "--dst",
-    "--attr",
-    "--disk",
-    "--sys-apps",
-    "--extra-apps",
-    NULL,
+    "--dst", "--attr", "--disk", "--sys-apps", "--extra-apps", NULL,
 };
 static const char *const FLAGS_DISK[] = {
     "--disk",
@@ -387,30 +389,24 @@ static int check_positionals(int argc, char **argv, int min_pos, int max_pos)
 {
     const char *pos[8];
     int n = collect_positional(argc, argv, pos, 8);
+
     if (n < min_pos || n > max_pos)
     {
         err("unexpected arguments");
         return 1;
     }
+
     return 0;
 }
 
 static bool parse_cmd_new_args(int argc, char **argv, CmdNewConfig *cfg)
 {
     const char *disk_size_str = get_str_flag(argc, argv, "--disk-size");
-    const char *mem_str = get_str_flag(argc, argv, "--mem");
     const char *platform_str = get_str_flag(argc, argv, "--platform");
-    const char *arch_str = get_str_flag(argc, argv, "--arch");
 
     cfg->no_extra = get_bool_flag(argc, argv, "--no-extra");
 
     cfg->disk_size_kb = 0; /* 0 means "unset"; resolved to max after build */
-
-    if (!mem_str)
-    {
-        err("--mem required (total RAM in KB, e.g. --mem=64K)");
-        return false;
-    }
 
     if (!platform_str)
     {
@@ -419,11 +415,11 @@ static bool parse_cmd_new_args(int argc, char **argv, CmdNewConfig *cfg)
     }
 
     cfg->platform = platform_str;
-    cfg->arch = arch_str ? arch_str : "riscv32";
 
     if (disk_size_str)
     {
         cfg->disk_size_kb = parse_sized_kb(disk_size_str);
+
         if (cfg->disk_size_kb <= 0)
         {
             err("invalid --disk-size '%s' (K suffix required)", disk_size_str);
@@ -431,45 +427,18 @@ static bool parse_cmd_new_args(int argc, char **argv, CmdNewConfig *cfg)
         }
     }
 
-    long mem_kb = parse_sized_kb(mem_str);
-    if (mem_kb <= 0)
-    {
-        err("invalid --mem '%s' (K suffix required)", mem_str);
-        return false;
-    }
-
-    cfg->mem_bytes = mem_kb * 1024;
-    if (cfg->mem_bytes <= 0)
-    {
-        err("--mem out of range");
-        return false;
-    }
-
     return true;
 }
 
-static bool validate_build_env(const SysgenPaths *paths, const char *platform, const char *arch)
+static bool validate_build_env(const SysgenPaths *paths)
 {
     char path_buf[SYSGEN_FULL_PATH_MAX];
 
     snprintf(path_buf, sizeof(path_buf), "%s/core/kernel/bdos.c", paths->root_dir);
+
     if (!file_exists(path_buf))
     {
         err("Cannot locate CP/M Neo root directory at '%s'", paths->root_dir);
-        return false;
-    }
-
-    snprintf(path_buf, sizeof(path_buf), "%s/platform/%s", paths->root_dir, platform);
-    if (!dir_exists(path_buf))
-    {
-        err("platform '%s' not found under %s/platform/", platform, paths->root_dir);
-        return false;
-    }
-
-    snprintf(path_buf, sizeof(path_buf), "%s/arch/%s", paths->root_dir, arch);
-    if (!dir_exists(path_buf))
-    {
-        err("arch '%s' not found under %s/arch/", arch, paths->root_dir);
         return false;
     }
 
@@ -483,16 +452,17 @@ static bool validate_build_env(const SysgenPaths *paths, const char *platform, c
  */
 int cmd_new(int argc, char **argv)
 {
-    if (check_flags(argc, argv, FLAGS_NEW) != 0 ||
-        check_positionals(argc, argv, 1, 1) != 0)
+    if (check_flags(argc, argv, FLAGS_NEW) != 0 || check_positionals(argc, argv, 1, 1) != 0)
         return 1;
 
     CmdNewConfig cfg;
+
     if (!parse_cmd_new_args(argc, argv, &cfg))
         return 1;
 
     const SysgenPaths *paths = sysgen_paths();
-    if (!validate_build_env(paths, cfg.platform, cfg.arch))
+
+    if (!validate_build_env(paths))
         return 1;
 
     char path_buf[SYSGEN_FULL_PATH_MAX];
@@ -506,16 +476,23 @@ int cmd_new(int argc, char **argv)
         disk_size_over_cap(cfg.disk_size_kb, pk, pc) != 0)
         return 1;
 
-    if (run_build_script(paths, cfg.arch, cfg.mem_bytes, cfg.platform) != 0)
+    if (run_build_script(paths, cfg.platform) != 0)
         return 1;
+
+    char os_platform_buf[16];
+    const char *os_platform = cfg.platform;
+
+    if (read_platform_id(paths, os_platform_buf, sizeof(os_platform_buf)) == 0)
+        os_platform = os_platform_buf;
 
     int ret = 1;
     uint8_t *kern = NULL, *elf = NULL, *ccp = NULL;
     uint32_t ksz = 0, esz = 0, ccpsz = 0, bsz = 0;
-    uint32_t kern_load = 0;
+    uint32_t kern_load = 0, tpa_base = 0;
 
     snprintf(path_buf, sizeof(path_buf), "%s/bootloader.bin", paths->build_dir);
     bsz = get_file_size(path_buf);
+
     if (bsz == 0)
     {
         err("%s missing", path_buf);
@@ -523,6 +500,7 @@ int cmd_new(int argc, char **argv)
     }
 
     snprintf(path_buf, sizeof(path_buf), "%s/core/int/kernel.bin", paths->build_dir);
+
     if (read_file(path_buf, &kern, &ksz) != 0)
     {
         err("%s missing", path_buf);
@@ -530,6 +508,7 @@ int cmd_new(int argc, char **argv)
     }
 
     snprintf(path_buf, sizeof(path_buf), "%s/core/int/kernel.elf", paths->build_dir);
+
     if (read_file(path_buf, &elf, &esz) != 0)
     {
         err("%s missing", path_buf);
@@ -541,10 +520,18 @@ int cmd_new(int argc, char **argv)
         err("cannot find __kernel_base");
         goto cleanup;
     }
+
+    if (elf32_symbol(elf, esz, "__tpa_base", &tpa_base) != 0)
+    {
+        err("cannot find __tpa_base");
+        goto cleanup;
+    }
+
     free(elf);
     elf = NULL;
 
     snprintf(path_buf, sizeof(path_buf), "%s/core/int/ccp.bin", paths->build_dir);
+
     if (read_file(path_buf, &ccp, &ccpsz) != 0)
     {
         ccp = NULL;
@@ -559,8 +546,8 @@ int cmd_new(int argc, char **argv)
     if (disk_size_over_cap(cfg.disk_size_kb, ksz, ccpsz) != 0)
         goto cleanup;
 
-    int reserved = mkdisk_build((uint32_t)cfg.disk_size_kb, kern, ksz, ccp, ccpsz,
-                                kern_load, OS_VER, KERN_VER, CCP_VER, cfg.platform);
+    int reserved = mkdisk_build((uint32_t)cfg.disk_size_kb, kern, ksz, ccp, ccpsz, kern_load,
+                                OS_VER, KERN_VER, CCP_VER, os_platform);
 
     if (reserved < 0)
     {
@@ -608,7 +595,7 @@ int cmd_new(int argc, char **argv)
     if (save_disk(out_disk_path) != 0)
         goto cleanup;
 
-    report_build((uint32_t)cfg.disk_size_kb, bsz, ksz, ccpsz, kern_load,
+    report_build((uint32_t)cfg.disk_size_kb, bsz, ksz, ccpsz, kern_load, tpa_base,
                  (uint32_t)reserved, out_disk_path);
     ret = 0;
 
@@ -619,31 +606,33 @@ cleanup:
     return ret;
 }
 
-static int build_folder_com(const SysgenPaths *paths, const char *src,
-                            const BuildFolderOpts *opts)
+static int build_folder_com(const SysgenPaths *paths, const char *src, const BuildFolderOpts *opts)
 {
-    char arch_path[SYSGEN_FULL_PATH_MAX];
-    snprintf(arch_path, sizeof(arch_path), "%s/.arch", paths->build_dir);
+    char platform_path[SYSGEN_FULL_PATH_MAX];
+    snprintf(platform_path, sizeof(platform_path), "%s/.platform_dir", paths->build_dir);
 
-    FILE *f = fopen(arch_path, "r");
+    FILE *f = fopen(platform_path, "r");
+
     if (!f)
     {
         err("no system build found in '%s' -- run 'sysgen new' first", paths->build_dir);
         return 1;
     }
 
-    if (fgets(opts->arch, opts->arch_n, f) == NULL)
-        opts->arch[0] = '\0';
+    if (fgets(opts->platform, opts->platform_n, f) == NULL)
+        opts->platform[0] = '\0';
     fclose(f);
 
-    opts->arch[strcspn(opts->arch, "\r\n")] = '\0';
-    if (!*opts->arch)
+    opts->platform[strcspn(opts->platform, "\r\n")] = '\0';
+
+    if (!*opts->platform)
     {
-        err("missing architecture record '%s' -- re-run 'sysgen new'", arch_path);
+        err("missing platform record '%s' -- re-run 'sysgen new'", platform_path);
         return 1;
     }
 
     size_t len = strlen(src);
+
     while (len > 0 && (src[len - 1] == '/' || src[len - 1] == '\\'))
         len--;
 
@@ -661,10 +650,12 @@ static int build_folder_com(const SysgenPaths *paths, const char *src,
      * its extension (mycmd.c -> mycmd.com -> MYCMD.COM). */
     const char *base;
     char basebuf[SYSGEN_FULL_PATH_MAX];
+
     if (!dir_exists(dirbuf))
     {
         snprintf(basebuf, sizeof(basebuf), "%s", extract_basename(dirbuf));
         char *dot = strrchr(basebuf, '.');
+
         if (dot && dot != basebuf)
             *dot = '\0';
         base = basebuf;
@@ -686,13 +677,7 @@ static int build_folder_com(const SysgenPaths *paths, const char *src,
     snprintf(script, sizeof(script), "%s/../app_build.sh", paths->build_dir);
 
     char *argv_run[] = {
-        (char *)"sh",
-        script,
-        opts->arch,
-        dirbuf,
-        (char *)"-o",
-        opts->out_com,
-        NULL,
+        (char *)"sh", script, opts->platform, dirbuf, (char *)"-o", opts->out_com, NULL,
     };
 
     return spawn_and_wait(argv_run);
@@ -703,8 +688,8 @@ static int build_folder_com(const SysgenPaths *paths, const char *src,
 static int build_and_add(BundledScan *scan, const char *src)
 {
     char out_com[SYSGEN_FULL_PATH_MAX + 256];
-    char arch_buf[64];
-    BuildFolderOpts bfo = {out_com, sizeof(out_com), arch_buf, sizeof(arch_buf)};
+    char platform_buf[64];
+    BuildFolderOpts bfo = {out_com, sizeof(out_com), platform_buf, sizeof(platform_buf)};
 
     if (build_folder_com(scan->paths, src, &bfo) != 0)
     {
@@ -724,6 +709,7 @@ static int build_and_add(BundledScan *scan, const char *src)
 static int install_bundled_app(const char *dir, const char *name, void *ud)
 {
     BundledScan *scan = ud;
+
     if (scan->failed)
         return 1;
 
@@ -740,6 +726,7 @@ static int install_bundled_source(const char *path, const char *name, void *ud)
 {
     BundledScan *scan = ud;
     (void)name;
+
     if (scan->failed)
         return 1;
 
@@ -751,13 +738,17 @@ static int install_sys_apps(const SysgenPaths *paths, const AddFileOpts *opts)
     BundledScan scan = {paths, opts, 0};
     char sys_dir[SYSGEN_FULL_PATH_MAX];
     snprintf(sys_dir, sizeof(sys_dir), "%s/apps/sys", paths->root_dir);
+
     if (!dir_exists(sys_dir))
     {
         err("sys apps directory not found at '%s'", sys_dir);
         return 1;
     }
+
     printf("  \nInstalling sys apps...\n");
+
     for_each_source_file(sys_dir, install_bundled_source, &scan);
+
     return scan.failed ? 1 : 0;
 }
 
@@ -766,10 +757,14 @@ static int install_extra_apps(const SysgenPaths *paths, const AddFileOpts *opts)
     BundledScan scan = {paths, opts, 0};
     char extra_dir[SYSGEN_FULL_PATH_MAX];
     snprintf(extra_dir, sizeof(extra_dir), "%s/apps/extra", paths->root_dir);
+
     if (!dir_exists(extra_dir))
         return 0;
+
     printf("  \nInstalling extra apps...\n");
+
     for_each_subdir(extra_dir, install_bundled_app, &scan);
+
     return scan.failed ? 1 : 0;
 }
 
@@ -800,11 +795,12 @@ static int add_data_open(const char *file, const AddFileOpts *opts)
 
     /* Skip files that already exist on the destination volume/user area. */
     FileInfo fi;
+
     if (bd_find(n83, ctx, &fi, 0) > 0)
     {
         free(data);
-        printf("  %s %-13s -> %c:%u  (already exists, skipped)\n",
-               opts->verb, dot, 'A' + opts->vol, opts->user);
+        printf("  %s %-13s -> %c:%u  (already exists, skipped)\n", opts->verb, dot, 'A' + opts->vol,
+               opts->user);
         return 2;
     }
 
@@ -819,12 +815,15 @@ static int add_data_open(const char *file, const AddFileOpts *opts)
 
     uint32_t off = 0;
     int rc = EOK;
+
     while (off < len)
     {
         uint16_t chunk = ((len - off) > 1024) ? 1024 : (uint16_t)(len - off);
         rc = bd_write(fd, data + off, chunk);
+
         if (rc < 0)
             break;
+
         off += (uint32_t)rc;
     }
 
@@ -854,19 +853,23 @@ static int add_folder_file(const char *path, const char *name, void *ud)
 {
     AddFolderScan *scan = ud;
     (void)name;
+
     if (scan->failed)
         return 1;
 
     int rc = add_data_open(path, scan->opts);
+
     if (rc == 1)
     {
         scan->failed = 1;
         return 1;
     }
+
     if (rc == 2)
         scan->skipped++;
     else
         scan->added++;
+
     return 0;
 }
 
@@ -885,14 +888,13 @@ static int add_file(const char *disk, const char *file, const AddFileOpts *opts)
 /* Parse the shared add/install target options: the source positional, the
  * destination volume/user area, the file attributes, and the disk path.
  * When --attr is omitted, |dflt_attr| is used. */
-static int parse_file_target(int argc, char **argv, const char *usage,
-                             const char **src, int *vol, int *user,
-                             uint8_t *attr, uint8_t dflt_attr,
-                             char *disk_buf, size_t disk_n)
+static int parse_file_target(int argc, char **argv, const char *usage, const char **src, int *vol,
+                             int *user, uint8_t *attr, uint8_t dflt_attr, char *disk_buf,
+                             size_t disk_n)
 {
     const char *pos[4];
-    if (check_flags(argc, argv, FLAGS_FILE) != 0 ||
-        check_positionals(argc, argv, 2, 2) != 0)
+
+    if (check_flags(argc, argv, FLAGS_FILE) != 0 || check_positionals(argc, argv, 2, 2) != 0)
         return 1;
 
     if (collect_positional(argc, argv, pos, 4) < 2)
@@ -907,6 +909,7 @@ static int parse_file_target(int argc, char **argv, const char *usage,
 
     if (parse_dst(argc, argv, vol, user) != 0)
         return 1;
+
     return parse_attr_dflt(argc, argv, attr, dflt_attr);
 }
 
@@ -922,14 +925,16 @@ int cmd_add(int argc, char **argv)
     uint8_t attr;
     char disk_buf[SYSGEN_FULL_PATH_MAX];
 
-    if (parse_file_target(argc, argv,
-                          "sysgen add <file|folder> [--dst=Vn] [--attr=RO|RW|SYS|SYS+RO] [--disk=path]",
-                          &src, &vol, &user, &attr, 0, disk_buf, sizeof(disk_buf)) != 0)
+    if (parse_file_target(
+            argc, argv,
+            "sysgen add <file|folder> [--dst=Vn] [--attr=RO|RW|SYS|SYS+RO] [--disk=path]", &src,
+            &vol, &user, &attr, 0, disk_buf, sizeof(disk_buf)) != 0)
         return 1;
 
     AddFileOpts afo = {vol, user, attr, "added"};
 
     /* Folder mode: add every file from a flat folder, skipping duplicates. */
+
     if (dir_exists(src))
     {
         if (dir_has_subdirs(src))
@@ -943,15 +948,17 @@ int cmd_add(int argc, char **argv)
 
         AddFolderScan scan = {&afo, 0, 0, 0};
         for_each_flat_file(src, add_folder_file, &scan);
+
         if (scan.failed)
             return 1;
 
         bd_sync();
+
         if (save_disk(disk_buf) != 0)
             return 1;
 
-        printf("\nAdded %d file(s) to %c:%u (%d already existed)\n",
-               scan.added, 'A' + vol, user, scan.skipped);
+        printf("\nAdded %d file(s) to %c:%u (%d already existed)\n", scan.added, 'A' + vol, user,
+               scan.skipped);
         return 0;
     }
 
@@ -975,16 +982,17 @@ int cmd_install(int argc, char **argv)
     int extra_apps = get_bool_flag(argc, argv, "--extra-apps");
 
     /* Bundled-app mode: install the sys/extra apps from the SDK tree. */
+
     if (sys_apps || extra_apps)
     {
-        if (check_flags(argc, argv, FLAGS_INSTALL) != 0 ||
-            check_positionals(argc, argv, 1, 1) != 0)
+        if (check_flags(argc, argv, FLAGS_INSTALL) != 0 || check_positionals(argc, argv, 1, 1) != 0)
             return 1;
 
         char disk_buf[SYSGEN_FULL_PATH_MAX];
         resolve_disk(argc, argv, disk_buf, sizeof(disk_buf));
 
         int vol, user;
+
         if (parse_dst(argc, argv, &vol, &user) != 0)
             return 1;
 
@@ -994,19 +1002,25 @@ int cmd_install(int argc, char **argv)
         if (sys_apps)
         {
             uint8_t attr;
-            if (parse_attr_dflt(argc, argv, &attr,
-                                FILE_ATTR_SYSTEM | FILE_ATTR_READ_ONLY) != 0)
+
+            if (parse_attr_dflt(argc, argv, &attr, FILE_ATTR_SYSTEM | FILE_ATTR_READ_ONLY) != 0)
                 return 1;
+
             AddFileOpts afo = {vol, user, attr, "installed"};
+
             if (install_sys_apps(sysgen_paths(), &afo) != 0)
                 return 1;
         }
+
         if (extra_apps)
         {
             uint8_t attr;
+
             if (parse_attr_dflt(argc, argv, &attr, FILE_ATTR_READ_ONLY) != 0)
                 return 1;
+
             AddFileOpts afo = {vol, user, attr, "installed"};
+
             if (install_extra_apps(sysgen_paths(), &afo) != 0)
                 return 1;
         }
@@ -1020,9 +1034,10 @@ int cmd_install(int argc, char **argv)
     uint8_t attr;
     char disk_buf[SYSGEN_FULL_PATH_MAX];
 
-    if (parse_file_target(argc, argv,
-                          "sysgen install <folder|file.c> [--dst=Vn] [--attr=RO|RW|SYS|SYS+RO] [--disk=path]",
-                          &src, &vol, &user, &attr, FILE_ATTR_READ_ONLY, disk_buf, sizeof(disk_buf)) != 0)
+    if (parse_file_target(
+            argc, argv,
+            "sysgen install <folder|file.c> [--dst=Vn] [--attr=RO|RW|SYS|SYS+RO] [--disk=path]",
+            &src, &vol, &user, &attr, FILE_ATTR_READ_ONLY, disk_buf, sizeof(disk_buf)) != 0)
         return 1;
 
     if (!dir_exists(src) && !file_exists(src))
@@ -1038,8 +1053,8 @@ int cmd_install(int argc, char **argv)
     }
 
     char out_com[SYSGEN_PATH_MAX + 256];
-    char arch[64];
-    BuildFolderOpts bfo = {out_com, sizeof(out_com), arch, sizeof(arch)};
+    char platform[64];
+    BuildFolderOpts bfo = {out_com, sizeof(out_com), platform, sizeof(platform)};
 
     if (build_folder_com(sysgen_paths(), src, &bfo) != 0)
         return 1;
@@ -1055,8 +1070,7 @@ int cmd_install(int argc, char **argv)
  */
 int cmd_extract(int argc, char **argv)
 {
-    if (check_flags(argc, argv, FLAGS_DISK) != 0 ||
-        check_positionals(argc, argv, 1, 1) != 0)
+    if (check_flags(argc, argv, FLAGS_DISK) != 0 || check_positionals(argc, argv, 1, 1) != 0)
         return 1;
 
     char disk_buf[SYSGEN_FULL_PATH_MAX];
@@ -1066,17 +1080,20 @@ int cmd_extract(int argc, char **argv)
      * even when the system area is damaged. */
     uint8_t *buf = NULL;
     uint32_t len = 0;
+
     if (read_file(disk_buf, &buf, &len) != 0)
     {
         err("cannot read '%s'", disk_buf);
         return 1;
     }
+
     if (len < DISK_SECTOR_SIZE || (len % DISK_SECTOR_SIZE) != 0)
     {
         free(buf);
         err("'%s' is not a valid disk image", disk_buf);
         return 1;
     }
+
     sysgen_set_disk(buf, len);
 
     if (disk_init() != 0)
@@ -1089,6 +1106,7 @@ int cmd_extract(int argc, char **argv)
     const SysgenPaths *paths = sysgen_paths();
     char out_dir[SYSGEN_FULL_PATH_MAX];
     snprintf(out_dir, sizeof(out_dir), "%s/extract", paths->build_dir);
+
     if (mkdir_p(out_dir) != 0)
     {
         err("cannot create extract directory '%s'", out_dir);
@@ -1130,6 +1148,7 @@ int cmd_extract(int argc, char **argv)
                 n83[NAME83_LEN] = '\0';
 
                 int fd = bd_open(n83, ctx, 0);
+
                 if (fd < 0)
                 {
                     printf("  error opening %c:%u %s (%s)\n", 'A' + v, u, fi.name, err_str(fd));
@@ -1141,18 +1160,22 @@ int cmd_extract(int argc, char **argv)
                 uint32_t size = 0, cap = 0;
                 uint8_t chunk[1024];
                 int r;
+
                 while ((r = bd_read(fd, chunk, sizeof(chunk))) > 0)
                 {
                     if (size + (uint32_t)r > cap)
                     {
                         cap = cap ? cap * 2 : 4096;
+
                         while (cap < size + (uint32_t)r)
                             cap *= 2;
                         data = realloc(data, cap);
                     }
+
                     memcpy(data + size, chunk, (size_t)r);
                     size += (uint32_t)r;
                 }
+
                 bd_close(fd);
 
                 if (r < 0)
@@ -1170,6 +1193,7 @@ int cmd_extract(int argc, char **argv)
                     errors++;
                     continue;
                 }
+
                 free(data);
 
                 char h[24];
@@ -1181,8 +1205,8 @@ int cmd_extract(int argc, char **argv)
     }
 
     free(buf);
-    printf("\nExtracted %d file(s) to '%s' (%d skipped, %d errors)\n",
-           total, out_dir, skipped, errors);
+    printf("\nExtracted %d file(s) to '%s' (%d skipped, %d errors)\n", total, out_dir, skipped,
+           errors);
     return errors ? 1 : 0;
 }
 
@@ -1193,13 +1217,14 @@ int cmd_extract(int argc, char **argv)
 int cmd_dir(int argc, char **argv)
 {
     const char *pos[3];
-    if (check_flags(argc, argv, FLAGS_DISK) != 0 ||
-        check_positionals(argc, argv, 1, 2) != 0)
+
+    if (check_flags(argc, argv, FLAGS_DISK) != 0 || check_positionals(argc, argv, 1, 2) != 0)
         return 1;
 
     int npos = collect_positional(argc, argv, pos, 3);
 
     ImageTarget tgt;
+
     if (setup_disk_target(argc, argv, (npos > 1) ? pos[1] : NULL, &tgt) != 0)
         return 1;
 
@@ -1235,8 +1260,8 @@ int cmd_dir(int argc, char **argv)
 int cmd_type(int argc, char **argv)
 {
     const char *pos[3];
-    if (check_flags(argc, argv, FLAGS_DISK) != 0 ||
-        check_positionals(argc, argv, 2, 3) != 0)
+
+    if (check_flags(argc, argv, FLAGS_DISK) != 0 || check_positionals(argc, argv, 2, 3) != 0)
         return 1;
 
     int npos = collect_positional(argc, argv, pos, 3);
@@ -1246,10 +1271,12 @@ int cmd_type(int argc, char **argv)
     n83[NAME83_LEN] = '\0';
 
     ImageTarget tgt;
+
     if (setup_disk_target(argc, argv, (npos > 2) ? pos[2] : NULL, &tgt) != 0)
         return 1;
 
     int fd = bd_open(n83, tgt.ctx, 0);
+
     if (fd < 0)
     {
         err("type: %s (%s)", n83, err_str(fd));
@@ -1258,6 +1285,7 @@ int cmd_type(int argc, char **argv)
 
     uint8_t buf[DISK_SECTOR_SIZE];
     int rc = 0;
+
     while ((rc = bd_read(fd, buf, DISK_SECTOR_SIZE)) > 0)
         fwrite(buf, 1, (size_t)rc, stdout);
 
@@ -1278,8 +1306,8 @@ int cmd_type(int argc, char **argv)
 int cmd_era(int argc, char **argv)
 {
     const char *pos[3];
-    if (check_flags(argc, argv, FLAGS_DISK) != 0 ||
-        check_positionals(argc, argv, 2, 3) != 0)
+
+    if (check_flags(argc, argv, FLAGS_DISK) != 0 || check_positionals(argc, argv, 2, 3) != 0)
         return 1;
 
     int npos = collect_positional(argc, argv, pos, 3);
@@ -1289,10 +1317,12 @@ int cmd_era(int argc, char **argv)
     n83[NAME83_LEN] = '\0';
 
     ImageTarget tgt;
+
     if (setup_disk_target(argc, argv, (npos > 2) ? pos[2] : NULL, &tgt) != 0)
         return 1;
 
     int rc = bd_delete(n83, tgt.ctx);
+
     if (rc != EOK)
     {
         err("era: %s (%s)", n83, err_str(rc));
@@ -1300,6 +1330,7 @@ int cmd_era(int argc, char **argv)
     }
 
     bd_sync();
+
     if (save_disk(tgt.disk_path) != 0)
         return 1;
 
@@ -1313,8 +1344,8 @@ int cmd_era(int argc, char **argv)
 int cmd_ren(int argc, char **argv)
 {
     const char *pos[4];
-    if (check_flags(argc, argv, FLAGS_DISK) != 0 ||
-        check_positionals(argc, argv, 3, 4) != 0)
+
+    if (check_flags(argc, argv, FLAGS_DISK) != 0 || check_positionals(argc, argv, 3, 4) != 0)
         return 1;
 
     int npos = collect_positional(argc, argv, pos, 4);
@@ -1326,10 +1357,12 @@ int cmd_ren(int argc, char **argv)
     new83[NAME83_LEN] = '\0';
 
     ImageTarget tgt;
+
     if (setup_disk_target(argc, argv, (npos > 3) ? pos[3] : NULL, &tgt) != 0)
         return 1;
 
     int rc = bd_rename(old83, new83, tgt.ctx);
+
     if (rc != EOK)
     {
         err("ren: %s (%s)", old83, err_str(rc));
@@ -1337,6 +1370,7 @@ int cmd_ren(int argc, char **argv)
     }
 
     bd_sync();
+
     if (save_disk(tgt.disk_path) != 0)
         return 1;
 
@@ -1350,8 +1384,7 @@ int cmd_ren(int argc, char **argv)
  */
 int cmd_stat(int argc, char **argv)
 {
-    if (check_flags(argc, argv, FLAGS_DISK) != 0 ||
-        check_positionals(argc, argv, 1, 1) != 0)
+    if (check_flags(argc, argv, FLAGS_DISK) != 0 || check_positionals(argc, argv, 1, 1) != 0)
         return 1;
 
     char disk_buf[SYSGEN_FULL_PATH_MAX];
@@ -1361,8 +1394,7 @@ int cmd_stat(int argc, char **argv)
         return 1;
 
     printf("  disk: %s\n", disk_buf);
-    printf("  block: 1K, blocks: %u, block base: LBA %u\n",
-           disk_blocks(), disk_block_base());
+    printf("  block: 1K, blocks: %u, block base: LBA %u\n", disk_blocks(), disk_block_base());
 
     for (int v = 0; v < VOL_MAX; v++)
     {
@@ -1371,15 +1403,17 @@ int cmd_stat(int argc, char **argv)
             printf("  %c: unmounted\n", 'A' + v);
             continue;
         }
+
         if (bd_bind((int8_t)v) != EOK)
         {
             printf("  %c: mount failed\n", 'A' + v);
             continue;
         }
+
         VolStat st;
         bd_vstat((int8_t)v, &st);
-        printf("  %c: %uk total, %uk free, %s\n",
-               'A' + v, st.total_blocks, st.free_blocks, st.read_only ? "RO" : "RW");
+        printf("  %c: %uk total, %uk free, %s\n", 'A' + v, st.total_blocks, st.free_blocks,
+               st.read_only ? "RO" : "RW");
     }
 
     return 0;
