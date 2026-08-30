@@ -73,7 +73,6 @@ typedef struct
 typedef struct
 {
     long disk_size_kb;
-    long mem_bytes;
     const char *platform;
     bool no_extra;
 } CmdNewConfig;
@@ -267,19 +266,16 @@ static int setup_disk_target(int argc, char **argv, const char *vn_arg, ImageTar
  * System Generation & Build Logic
  * ========================================================================= */
 
-static int run_build_script(const SysgenPaths *paths, long mem, const char *platform)
+static int run_build_script(const SysgenPaths *paths, const char *platform)
 {
     char script[SYSGEN_FULL_PATH_MAX];
     snprintf(script, sizeof(script), "%s/../build_disk.sh", paths->build_dir);
-
-    char mem_flag[32];
-    snprintf(mem_flag, sizeof(mem_flag), "--mem=%ldK", mem / 1024);
 
     char plat_flag[64];
     snprintf(plat_flag, sizeof(plat_flag), "--platform=%s", platform);
 
     char *argv[] = {
-        (char *)"sh", script, mem_flag, plat_flag, NULL,
+        (char *)"sh", script, plat_flag, NULL,
     };
 
     printf("Starting disk build for %s\n", platform);
@@ -368,7 +364,7 @@ static bool get_bool_flag(int argc, char **argv, const char *flag_name)
 
 /* Whitelists of flags accepted by each command (NULL-terminated). */
 static const char *const FLAGS_NEW[] = {
-    "--disk-size", "--mem", "--platform", "--no-extra", NULL,
+    "--disk-size", "--platform", "--no-extra", NULL,
 };
 static const char *const FLAGS_FILE[] = {
     "--dst",
@@ -406,18 +402,11 @@ static int check_positionals(int argc, char **argv, int min_pos, int max_pos)
 static bool parse_cmd_new_args(int argc, char **argv, CmdNewConfig *cfg)
 {
     const char *disk_size_str = get_str_flag(argc, argv, "--disk-size");
-    const char *mem_str = get_str_flag(argc, argv, "--mem");
     const char *platform_str = get_str_flag(argc, argv, "--platform");
 
     cfg->no_extra = get_bool_flag(argc, argv, "--no-extra");
 
     cfg->disk_size_kb = 0; /* 0 means "unset"; resolved to max after build */
-
-    if (!mem_str)
-    {
-        err("--mem required (total RAM in KB, e.g. --mem=64K)");
-        return false;
-    }
 
     if (!platform_str)
     {
@@ -436,22 +425,6 @@ static bool parse_cmd_new_args(int argc, char **argv, CmdNewConfig *cfg)
             err("invalid --disk-size '%s' (K suffix required)", disk_size_str);
             return false;
         }
-    }
-
-    long mem_kb = parse_sized_kb(mem_str);
-
-    if (mem_kb <= 0)
-    {
-        err("invalid --mem '%s' (K suffix required)", mem_str);
-        return false;
-    }
-
-    cfg->mem_bytes = mem_kb * 1024;
-
-    if (cfg->mem_bytes <= 0)
-    {
-        err("--mem out of range");
-        return false;
     }
 
     return true;
@@ -503,7 +476,7 @@ int cmd_new(int argc, char **argv)
         disk_size_over_cap(cfg.disk_size_kb, pk, pc) != 0)
         return 1;
 
-    if (run_build_script(paths, cfg.mem_bytes, cfg.platform) != 0)
+    if (run_build_script(paths, cfg.platform) != 0)
         return 1;
 
     char os_platform_buf[16];

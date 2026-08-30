@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # CP/M Neo OS build backend — driven by the sysgen tool.
 #
-#   sh sysgen/build_disk.sh --mem=<KB> --platform=<PLATFORM>
+#   sh sysgen/build_disk.sh --platform=<PLATFORM>
 #
 # Builds the bootloader, kernel and CCP into sysgen/build/, next to the
 # tool binary.  Runs from anywhere: it locates the CP/M Neo root relative
@@ -10,34 +10,24 @@
 # 'sysgen new' / 'sysgen install'.
 #
 # The target's memory layout comes from platform/<PLATFORM>/config.sh
-# (ARCH, IO_BASE, RAM_BASE).  Everything else is derived here:
-#   RAM_TOP   = RAM_BASE + total memory
-#   KERN_CEIL = min(RAM_TOP, IO_BASE)   (top of usable RAM)
-#   TPA_BASE  = RAM_BASE + 0x100        (CP/M TPA load address)
+# (ID, ARCH, RAM_SIZE, IO_BASE, RAM_BASE).  Everything else is derived here:
+#   RAM_END   = RAM_BASE + RAM_SIZE   (nominal end of the SRAM region)
+#   RAM_TOP   = min(RAM_END, IO_BASE) (top of usable RAM; what the kernel
+#                                      packs below — __ram_top)
+#   TPA_BASE  = RAM_BASE + 0x100      (CP/M TPA load address)
 
 set -eu
 
-MEM_SIZE=""
 PLATFORM_ID=""
 
 for arg in "$@"; do
     case "$arg" in
-        --mem=*)    MEM_SIZE="${arg#--mem=}" ;;
         --platform=*) PLATFORM_ID="${arg#--platform=}" ;;
         *) echo "Unknown option: $arg" >&2; exit 1 ;;
     esac
 done
 
-MEM_SIZE=${MEM_SIZE:?"--mem is required (e.g. --mem=64K)"}
 PLATFORM_ID=${PLATFORM_ID:?"--platform=<ID> is required"}
-
-# Convert --mem=64K style suffix to hex bytes for ld --defsym
-mem_kb=$(printf '%s' "$MEM_SIZE" | tr '[:lower:]' '[:upper:]')
-case "$mem_kb" in
-    *K) mem_kb=${mem_kb%K} ;;
-    *)  echo "--mem value must have K suffix (e.g. --mem=64K)" >&2; exit 1 ;;
-esac
-MEM_HEX=$(printf '0x%X' "$((mem_kb * 1024))")
 
 SELF=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT=$(CDPATH= cd -- "$SELF/.." && pwd)
@@ -95,13 +85,14 @@ if [ -z "$PLATFORM_DIR" ]; then
     exit 1
 fi
 
-# Platform metadata (ARCH, IO_BASE, RAM_BASE, ID) from platform/$PLATFORM_DIR/config.sh
+# Platform metadata (ID, ARCH, RAM_SIZE, IO_BASE, RAM_BASE) from platform/$PLATFORM_DIR/config.sh
 # shellcheck source=/dev/null
 . "platform/$PLATFORM_DIR/config.sh"
 
 ARCH=${ARCH:?"$PLATFORM_ID: ARCH not set in platform/$PLATFORM_DIR/config.sh"}
 IO_BASE=${IO_BASE:?"$PLATFORM_ID: IO_BASE not set in platform/$PLATFORM_DIR/config.sh"}
 RAM_BASE=${RAM_BASE:?"$PLATFORM_ID: RAM_BASE not set in platform/$PLATFORM_DIR/config.sh"}
+RAM_SIZE=${RAM_SIZE:?"$PLATFORM_ID: RAM_SIZE not set in platform/$PLATFORM_DIR/config.sh"}
 ID=${ID:?"$PLATFORM_ID: ID not set in platform/$PLATFORM_DIR/config.sh (8-char OS platform id)"}
 
 CFG_ID_U=$(printf '%s' "$ID"          | tr '[:lower:]' '[:upper:]')
@@ -120,22 +111,26 @@ fi
 # shellcheck source=/dev/null
 . "arch/$ARCH/config.sh"
 
-# Derived layout.  The min() clamp keeps the kernel from ever colliding with
-# the MMIO window when IO_BASE lies inside RAM (as on vemu), and the linker
+# Derived layout.  RAM_END is the nominal end of SRAM (RAM_BASE + RAM_SIZE);
+# RAM_TOP is the top of usable RAM and may be lower when an MMIO window lies
+# inside the nominal RAM range (as on vemu): RAM_TOP = min(RAM_END, IO_BASE).
+# The clamp keeps the kernel from ever colliding with that window.  On a real
+# MCU where peripherals are mapped far above SRAM, IO_BASE > RAM_END and
+# RAM_TOP falls back to RAM_END — the whole SRAM region is usable.  The linker
 # scripts below enforce the real invariants: boot scratch/stack, the kernel
-# image, and the CCP/TPA must all fit under __mem_top — a clashing IO_BASE or
+# image, and the CCP/TPA must all fit under __ram_top — a clashing IO_BASE or
 # RAM_BASE therefore fails the link, never producing a broken image.
 RAM_BASE_DEC=$((RAM_BASE))
-RAM_TOP_DEC=$((RAM_BASE + mem_kb * 1024))
+RAM_END_DEC=$((RAM_BASE + RAM_SIZE))
 IO_BASE_DEC=$((IO_BASE))
-if [ "$RAM_TOP_DEC" -lt "$IO_BASE_DEC" ]; then
-    KERN_CEIL_DEC=$RAM_TOP_DEC
+if [ "$RAM_END_DEC" -lt "$IO_BASE_DEC" ]; then
+    RAM_TOP_DEC=$RAM_END_DEC
 else
-    KERN_CEIL_DEC=$IO_BASE_DEC
+    RAM_TOP_DEC=$IO_BASE_DEC
 fi
 TPA_BASE_DEC=$((RAM_BASE + 0x100))
 IO_BASE_HEX=$(printf '0x%X' "$IO_BASE_DEC")
-KERN_CEIL_HEX=$(printf '0x%X' "$KERN_CEIL_DEC")
+RAM_TOP_HEX=$(printf '0x%X' "$RAM_TOP_DEC")
 TPA_BASE_HEX=$(printf '0x%X' "$TPA_BASE_DEC")
 
 CC=${CROSS_COMPILE}gcc
@@ -172,7 +167,7 @@ $CC $CFLAGS $PLATFORM_INC -I core/kernel/ \
 $CC $CFLAGS -I arch/$ARCH/ -I core/kernel/ \
     -Wl,--gc-sections -Wl,--strip-debug -Wl,--no-warn-rwx-segments \
     -Wl,--defsym=__io_base="$IO_BASE_HEX" \
-    -Wl,--defsym=__mem_top="$KERN_CEIL_HEX" \
+    -Wl,--defsym=__ram_top="$RAM_TOP_HEX" \
     -T arch/$ARCH/linker_boot.ld \
     arch/$ARCH/boot.S "$INT/boot_plat.o" -o "$INT/bootloader.elf"
 $OBJCOPY -O binary --only-section=.boot "$INT/bootloader.elf" "$BUILD/bootloader.bin"
@@ -204,7 +199,7 @@ done
 $LD $LDFLAGS \
     --defsym=__KERN_START=0x4000 \
     --defsym=__io_base="$IO_BASE_HEX" \
-    --defsym=__mem_top="$KERN_CEIL_HEX" \
+    --defsym=__ram_top="$RAM_TOP_HEX" \
     --defsym=__tpa_base="$TPA_BASE_HEX" \
     -T core/kernel/linker_kernel.ld \
     $KERNEL_OBJS "$LIBGCC" -o "$INT/kernel_pass1.elf"
@@ -213,13 +208,13 @@ KERN_TOTAL_HEX=$($OBJDUMP -t "$INT/kernel_pass1.elf" | awk '/[[:space:]]__kernel
 KSTACK_GUARD_HEX=$($OBJDUMP -t "$INT/kernel_pass1.elf" | awk '/[[:space:]]__kstack_guard$/{print "0x"$1}')
 KERN_TOTAL=$(printf "%d" "$KERN_TOTAL_HEX")
 KSTACK_GUARD=$(printf "%d" "$KSTACK_GUARD_HEX")
-KERN_START=$(((KERN_CEIL_DEC - KERN_TOTAL - KSTACK_GUARD) & ~3))
+KERN_START=$(((RAM_TOP_DEC - KERN_TOTAL - KSTACK_GUARD) & ~3))
 KERN_START_HEX=0x$(printf '%x' "$KERN_START")
 
 $LD $LDFLAGS \
     --defsym=__KERN_START="$KERN_START_HEX" \
     --defsym=__io_base="$IO_BASE_HEX" \
-    --defsym=__mem_top="$KERN_CEIL_HEX" \
+    --defsym=__ram_top="$RAM_TOP_HEX" \
     --defsym=__tpa_base="$TPA_BASE_HEX" \
     -T core/kernel/linker_kernel.ld \
     $KERNEL_OBJS "$LIBGCC" -o "$INT/kernel.elf"

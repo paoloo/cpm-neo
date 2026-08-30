@@ -57,19 +57,15 @@ read (it is required, and may not be `NULL`).
 A platform is a self-contained `platform/<name>/` directory:
 
 1. `config.sh` declares the platform facts:
-   - `ARCH` — the ISA directory under `arch/` (selects the toolchain)
-   - `IO_BASE` — base address of the peripheral MMIO window
-   - `RAM_BASE` — base address of the RAM region holding CP/M Neo
    - `ID` — the 8-char max platform id shown by the OS and stamped into
      sector 0 (`S0_PLATFORM`). It is the platform's identity for `--platform`,
-     so it is required. The folder may be longer or use other characters,
-     e.g. `platform/blackpill-411fe/` with `ID="BPF411E"`.
+     so it is required. e.g. `platform/blackpill-411fe/` with `ID="BPF411E"`.
+   - `ARCH` — the ISA directory under `arch/` (selects the toolchain)
+   - `RAM_SIZE` — total RAM in bytes (hex), e.g. `0x10000` = 64 KB
+   - `RAM_BASE` — base address of the RAM region holding CP/M Neo
+   - `IO_BASE` — base address of the peripheral MMIO window
 2. `bios.c` implements the functions in `bios.h`.
 3. Build with `sysgen new ... --platform=<id>`.
-
-Everything else (TPA base, kernel placement) is derived from these values
-during the build, so a new board needs no changes to the kernel, linker
-scripts, or build logic.
 
 ### Platform lookup
 
@@ -81,19 +77,12 @@ scripts, or build logic.
   (`duplicate platform ID ...`);
 - an unmatched id fails with `unknown platform '<id>'`.
 
-The platform directory is a private filesystem location derived from the
-match; it is used only inside `build_disk.sh` (and, via the internal
-`.platform_dir` record, `app_build.sh`). The `ID` is what `--platform`
-selects, is written to sector 0 (`S0_PLATFORM`), and is shown by the OS. The
-two may differ.
-
 ### The BIOS contract
 
 Each platform implements the functions declared in `core/kernel/bios.h`
 (console: `bios_conout`, `bios_conin`, `bios_constat`, `bios_consize`,
 `bios_init`; storage: `bios_read`, `bios_write`; time: `bios_time`) directly in
-`bios.c`. The kernel contract is a fixed set of functions — no abstractions in
-between.
+`bios.c`.
 
 A platform that supports several storage devices can select one at build time
 inside the storage functions:

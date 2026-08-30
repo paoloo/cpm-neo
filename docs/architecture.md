@@ -72,7 +72,7 @@ the platform's directory, then builds four components in order.
    - The real base `__KERN_START` is computed from
      `min(RAM_BASE + RAM_SIZE, IO_BASE) - __kernel_total - guard`, then
      pass 2 re-links with it, producing `kernel.bin`. The platform's
-     `IO_BASE`, `RAM_BASE`, and the derived `__tpa_base`/`__mem_top` are
+     `IO_BASE`, `RAM_BASE`, and the derived `__tpa_base`/`__ram_top` are
      supplied to both passes via `--defsym=`.
 3. **SDK libc**: the user-space library, archived to `libc.a`.
 4. **CCP**: linked like a user program (below).

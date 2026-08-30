@@ -29,5 +29,5 @@ SECTIONS {
 __boot_scratch   = ALIGN(_boot_bss_end, 0x200);
 __boot_stack_top = __boot_scratch + 0x280;
 
-ASSERT(__boot_stack_top <= __mem_top,
+ASSERT(__boot_stack_top <= __ram_top,
        "ERROR: boot scratch/stack reach top of usable RAM — image too large for this memory size")
