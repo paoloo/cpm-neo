@@ -46,7 +46,11 @@ See [Syscall Reference](syscall-reference.md) for the full list.
 
 ## Shared stack
 
-The kernel and user programs share a single stack at the boundary between the TPA and the kernel (`__kernel_base`) reserving 4 KB.
+The kernel, the CCP, and user programs share a single stack at the boundary
+between the TPA and the kernel (`__kernel_base`), reserving `__stack_size`
+(2 KB). `__stack_size` and `__stack_top` are owned by the kernel linker
+script and reach the CCP/apps via `--just-symbols`. Each program starts with
+a fresh stack via `crt0.S` (`sp = _stack_top = __kernel_base`).
 
 ## Program entry and exit
 

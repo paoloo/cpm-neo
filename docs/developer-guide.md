@@ -114,7 +114,7 @@ The `arch/<isa>/` directory needs four files:
 | `config.sh` | Toolchain metadata for this ISA |
 | `boot.S` | Architecture bootloader (loads the kernel and jumps to it) |
 | `linker_boot.ld` | Bootloader memory layout (first 1 KB of RAM) |
-| `crt0.S` | C runtime startup (kernel, CCP, and apps): sets the stack pointer, clears `.bss`, and jumps to `_start` |
+| `crt0.S` | C runtime startup (kernel, CCP, and apps): sets the stack pointer to the top of the shared stack, clears `.bss`, and jumps to `_start` |
 
 ### `config.sh` contract
 

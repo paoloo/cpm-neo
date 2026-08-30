@@ -49,14 +49,17 @@ SECTIONS {
 
     __kernel_total = ABSOLUTE(_kend) - ORIGIN(KRAM);
 
-    /* The kernel and the CCP/apps share a single stack at the top of the
-     * TPA (apps resolve _stack_top to __kernel_base via linker_sdk.ld).
+    /* The kernel, the CCP, and user programs share a single stack at the
+     * top of the TPA (the top slice of the TPA region, at __kernel_base).
      * There is no dedicated kernel stack: syscalls are plain jump-table
      * calls that run on the caller's stack, and there are no interrupt or
      * trap handlers, so a private kernel stack is only ever needed during
-     * the initial boot — which runs on this same shared stack (growing
-     * down into the then-empty TPA). */
-    _stack_top = ORIGIN(KRAM);
+     * the initial boot — which runs on this same stack (growing down into
+     * the then-empty TPA).  These symbols are owned here, in the kernel
+     * link, and flow to the CCP/apps via --just-symbols. */
+    __stack_size = 0x1000;
+    __stack_top  = ORIGIN(KRAM);
+    _stack_top   = __stack_top;
 
     ASSERT(_kend <= __ram_top, "ERROR: kernel image reaches top of usable RAM")
     /DISCARD/ : { *(.comment) *(.eh_frame) *(.note*) }
