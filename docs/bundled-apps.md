@@ -13,10 +13,29 @@
 
 | App | Purpose | Invoke |
 | --- | --- | --- |
+| **GUI** | Cooperative text desktop and task monitor | `GUI` |
 | **ED** | Line-oriented text editor | `ED <file>` |
 | **BASIC** | Tiny BASIC interpreter | `BASIC [prog.bas]` |
 
 The [Vemu emulator](https://mazin-o3.github.io/vemu/) also bundles the [PICO editor and ASM assembler](https://github.com/Mazin-O3/vemu/blob/main/docs/apps.md).
+
+## GUI
+
+`GUI` is a minimal 80x24 ANSI desktop inspired by NABU Cloud CP/M's compact
+title/list/detail interface. It cooperatively schedules four built-in tasks:
+a clock, system monitor, incremental directory scanner, and animated about
+panel. Each task keeps running when another panel is selected.
+
+| Key | Action |
+| --- | --- |
+| `Up` / `K`, `Down` / `J` | Select a task |
+| `Enter` / `Space` | Pause or resume the selected task |
+| `R` | Resume all tasks |
+| `Q` / `Ctrl+C` | Return to the CCP |
+
+This is application-level cooperative multitasking. CP/M Neo still has one
+fixed-address TPA, so it does not run multiple independent `.COM` binaries at
+the same time.
 
 ## BASIC
 
