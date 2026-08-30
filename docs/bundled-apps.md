@@ -31,6 +31,7 @@ blocks while waiting for input and has no periodic refresh or animation.
 | `Tab` / `Left` / `Right` | Switch active window |
 | `Up` / `K`, `Down` / `J` | Select a file |
 | `[` / `]` | Change the active window's volume |
+| `U` | Change the active window's user area (0–15) |
 | `Enter` | Read a document or run a `.COM` program |
 | `V` / `X` | View any file / run the selected `.COM` |
 | `R` | Reload the active directory |

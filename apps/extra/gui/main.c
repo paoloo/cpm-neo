@@ -129,11 +129,7 @@ static void desktop(void)
     }
 
     fill(0, 0, COLS, ' ', REVERSE);
-    text(2, 0, "FILE", REVERSE);
-    text(12, 0, "EDIT", REVERSE);
-    text(23, 0, "TOOLS", REVERSE);
-    text(35, 0, "FAV", REVERSE);
-    text(76, 0, "?", REVERSE);
+    text(2, 0, "FreeCPM GUI", REVERSE);
 }
 
 static void border(int x, int y, int width, int height)
@@ -303,11 +299,11 @@ static void draw_shell(void)
 
     fill(0, 21, COLS, ' ', REVERSE);
     text(1, 21,
-         "TAB/LEFT/RIGHT Window  UP/DOWN Select  [ ] Volume  ENTER Open  Q Quit",
+         "TAB/ARROWS Window  UP/DOWN Select  [ ] Volume  U User  ENTER Open  Q Quit",
          REVERSE);
     fill(0, 22, COLS, ' ', NORMAL);
     text(1, 22, message, NORMAL);
-    text(1, 23, "V View   X Run .COM   R Reload   H Help", NORMAL);
+    text(1, 23, "V View   X Run .COM   R Reload   U User area   H Help", NORMAL);
     flush();
 }
 
@@ -495,13 +491,73 @@ static void help_window(void)
     text(x + 3, y + 3, "TAB / LEFT / RIGHT  switch window", NORMAL);
     text(x + 3, y + 5, "UP / DOWN / PGUP     select file", NORMAL);
     text(x + 3, y + 7, "[ / ]                 change volume", NORMAL);
-    text(x + 3, y + 9, "ENTER                 read or run", NORMAL);
-    text(x + 3, y + 10, "V / X / R             view / run / reload", NORMAL);
+    text(x + 3, y + 8, "U                     change user area", NORMAL);
+    text(x + 3, y + 10, "ENTER                 read or run", NORMAL);
+    text(x + 3, y + 11, "V / X / R             view / run / reload", NORMAL);
     text(x + 3, y + 12, "Q                     close or quit", NORMAL);
     fill(0, 22, COLS, ' ', REVERSE);
     text(1, 22, "Press any key to close help", REVERSE);
     flush();
     read_key();
+    memset(shown, 0xff, sizeof(shown));
+}
+
+static void user_window(Pane *pane)
+{
+    int value = -1;
+
+    for (;;)
+    {
+        desktop();
+        const int x = 21;
+        const int y = 7;
+        const int width = 38;
+        const int height = 9;
+
+        for (int row = 0; row < height; row++)
+            fill(x, y + row, width, ' ', NORMAL);
+        border(x, y, width, height);
+        fill(x + 1, y + 1, width - 2, ' ', REVERSE);
+        text(x + 3, y + 1, "USER", REVERSE);
+        fmt(x + 3, y + 3, NORMAL, "Window %c: current user %u",
+            'A' + pane->volume, (uint32_t)pane->user);
+        text(x + 3, y + 5, "New user area (0-15):", NORMAL);
+        if (value >= 0)
+            fmt(x + 27, y + 5, REVERSE, " %u ", (uint32_t)value);
+        else
+            text(x + 27, y + 5, " _ ", REVERSE);
+        text(x + 3, y + 7, "ENTER apply   Q cancel", NORMAL);
+        flush();
+
+        int key = read_key();
+        if (key == 'q' || key == 'Q' || key == CH_BREAK)
+        {
+            set_message("User change cancelled");
+            break;
+        }
+        if (key >= '0' && key <= '9')
+        {
+            int next = value < 0 ? key - '0' : value * 10 + key - '0';
+            if (next <= USER_AREA_MAX)
+                value = next;
+        }
+        else if (key == '\b' || key == 127)
+        {
+            if (value >= 10)
+                value /= 10;
+            else
+                value = -1;
+        }
+        else if ((key == '\r' || key == '\n') && value >= 0)
+        {
+            pane->user = (uint8_t)value;
+            load_pane(pane);
+            set_message("Window %c: changed to user %u", 'A' + pane->volume,
+                        (uint32_t)pane->user);
+            break;
+        }
+    }
+
     memset(shown, 0xff, sizeof(shown));
 }
 
@@ -566,6 +622,8 @@ int main(void)
             set_message("Reloaded %c%u:", 'A' + pane->volume,
                         (uint32_t)pane->user);
         }
+        else if (key == 'u' || key == 'U')
+            user_window(pane);
         else if ((key == 'v' || key == 'V') && pane->count)
             view_entry(pane, &pane->files[pane->selected]);
         else if ((key == 'x' || key == 'X') && pane->count)
