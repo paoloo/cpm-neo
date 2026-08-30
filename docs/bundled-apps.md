@@ -13,7 +13,7 @@
 
 | App | Purpose | Invoke |
 | --- | --- | --- |
-| **GUI** | Cooperative text desktop and task monitor | `GUI` |
+| **GUI** | NABU-style dual-window file browser, reader, and launcher | `GUI` |
 | **ED** | Line-oriented text editor | `ED <file>` |
 | **BASIC** | Tiny BASIC interpreter | `BASIC [prog.bas]` |
 
@@ -21,21 +21,24 @@ The [Vemu emulator](https://mazin-o3.github.io/vemu/) also bundles the [PICO edi
 
 ## GUI
 
-`GUI` is a minimal 80x24 ANSI desktop inspired by NABU Cloud CP/M's compact
-title/list/detail interface. It cooperatively schedules four built-in tasks:
-a clock, system monitor, incremental directory scanner, and animated about
-panel. Each task keeps running when another panel is selected.
+`GUI` is a minimal 80x24 ANSI file desktop modeled on NABU's menu bar,
+stippled background, and dual directory windows. It browses two volumes at
+once, reads documents in a paged viewer, and launches `.COM` programs. It
+blocks while waiting for input and has no periodic refresh or animation.
 
 | Key | Action |
 | --- | --- |
-| `Up` / `K`, `Down` / `J` | Select a task |
-| `Enter` / `Space` | Pause or resume the selected task |
-| `R` | Resume all tasks |
+| `Tab` / `Left` / `Right` | Switch active window |
+| `Up` / `K`, `Down` / `J` | Select a file |
+| `[` / `]` | Change the active window's volume |
+| `Enter` | Read a document or run a `.COM` program |
+| `V` / `X` | View any file / run the selected `.COM` |
+| `R` | Reload the active directory |
+| `H` / `?` | Show help |
 | `Q` / `Ctrl+C` | Return to the CCP |
 
-This is application-level cooperative multitasking. CP/M Neo still has one
-fixed-address TPA, so it does not run multiple independent `.COM` binaries at
-the same time.
+Launching a `.COM` replaces the GUI in CP/M Neo's single fixed-address TPA;
+when that program exits, control returns to the CCP.
 
 ## BASIC
 
