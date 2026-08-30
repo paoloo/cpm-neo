@@ -1,6 +1,6 @@
 /*
  * bootloader/boot.S
- * CP/M Neo 32-bit RISV-V Bootloader
+ * CP/M Neo 32-bit RISC-V Bootloader
  */
 
 /* S0 (sector-0) field offsets come from core/kernel/s0_layout.h — the single
@@ -13,11 +13,7 @@
 .equ BOOT_SIG,        0xAA55
 .equ BOOT_MAGIC,      DISK_MAGIC
 
-.equ SECTOR_SIZE,    512
-
-/* ASCII values */
-.equ CH_0,   0x30
-.equ CH_DOT, 0x2E
+.equ SECTOR_SIZE,     512
 
 .extern bios_init
 .extern bios_read
@@ -34,9 +30,16 @@ _boot_start:
     la   sp, __boot_stack_top
     la   s7, __boot_scratch
 
+    /* Banner */
+    la   t0, msg_title
+    jal  ra, print_str
+
     /* Initialize hardware (BIOS) — required to read the kernel into RAM */
     jal  ra, bios_init
     bltz a0, err_bios
+
+    la   t0, msg_bios_ok
+    jal  ra, print_str
 
     /* Load sector 0 → scratch buffer */
     li   a0, 0
@@ -51,20 +54,7 @@ _boot_start:
     li   t1, BOOT_SIG
     bne  t0, t1, err_disk
 
-    /* Print banner ("Loading CP/M Neo ...\n\n") */
-    la   t0, msg_prefix
-    jal  ra, print_str
-
-    /* Print ASCII art */
-    la   t0, msg_art_1
-    jal  ra, print_str
-    la   t0, msg_art_2
-    jal  ra, print_str
-    la   t0, msg_art_3
-    jal  ra, print_str
-    la   t0, msg_art_4
-    jal  ra, print_str
-    la   t0, msg_art_5
+    la   t0, msg_disk_ok
     jal  ra, print_str
 
     /* Load kernel target address safely (handling 2-byte alignment at 0x006) */
@@ -76,6 +66,9 @@ _boot_start:
     lhu  s2, S0_KERN_SECTORS(s7)
     lhu  s6, S0_KERN_LBA(s7)
     beqz s2, err_disk
+
+    la   t0, msg_loading
+    jal  ra, print_str
 
     /* Load kernel binary — use saved registers across bios_read calls */
     mv   s3, s1                /* Target RAM destination */
@@ -99,33 +92,13 @@ _boot_start:
     li   t1, BOOT_MAGIC
     bne  t0, t1, err_kernel
 
+    la   t0, msg_kernel_ok
+    jal  ra, print_str
+
     /* Jump to kernel */
     jalr zero, s1, 0
 
 /* ── Helper Routines ─────────────────────────────────────── */
-
-print_ver:
-    addi sp, sp, -8
-    sw   ra, 4(sp)
-    sw   s0, 0(sp)
-    mv   s0, t0                /* Preserve version value */
-
-    srli a0, s0, 8
-    andi a0, a0, 0xFF
-    addi a0, a0, CH_0
-    jal  ra, bios_conout
-
-    li   a0, CH_DOT
-    jal  ra, bios_conout
-
-    andi a0, s0, 0xFF
-    addi a0, a0, CH_0
-    jal  ra, bios_conout
-
-    lw   s0, 0(sp)
-    lw   ra, 4(sp)
-    addi sp, sp, 8
-    ret
 
 print_str:
     addi sp, sp, -8
@@ -162,14 +135,13 @@ err_bios:
     j    .Lspin
 
 /* ── Strings ─────────────────────────────────────────────── */
-msg_prefix:     .asciz "Loading CP/M Neo ...\n\n"
-msg_art_1:      .asciz "   ____ ____   ____  __   _   _ _____ ___  \n"
-msg_art_2:      .asciz "  / ___|  _ \\ / /  \\/  | | \\ | | ____/ _ \\ \n"
-msg_art_3:      .asciz " | |   | |_) / /| |\\/| | |  \\| |  _|| | | |\n"
-msg_art_4:      .asciz " | |___|  __/ / | |  | | | |\\  | |__| |_| |\n"
-msg_art_5:      .asciz "  \\____|_| /_/  |_|  |_| |_| \\_|_____\\___/ \n"
-msg_err_disk:   .asciz "  \nDISK ERR\n"
-msg_err_bios:   .asciz "  \nBIOS ERR\n"
-msg_err_kernel: .asciz "  \nKERNEL ERR\n"
+msg_title:      .asciz "CP/M Neo RISC-V Bootloader\n\n"
+msg_bios_ok:    .asciz "- BIOS OK\n"
+msg_disk_ok:    .asciz "- Disk OK\n"
+msg_loading:    .asciz "- Loading Kernel\n"
+msg_kernel_ok:  .asciz "- Kernel OK\n"
+msg_err_bios:   .asciz "- BIOS ERR\n"
+msg_err_disk:   .asciz "- DISK ERR\n"
+msg_err_kernel: .asciz "- KERNEL ERR\n"
 
 .hword 0xAA55

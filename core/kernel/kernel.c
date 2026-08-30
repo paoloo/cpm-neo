@@ -599,6 +599,7 @@ int sys_info(SysInfo *out)
 
     memcpy(out->platform, &s0[S0_PLATFORM], 8);
     out->platform[8] = '\0';
+    strupr(out->platform);
 
     out->tpa = ((uint32_t)__kernel_base - (uintptr_t)__tpa_base) / 1024;
 
